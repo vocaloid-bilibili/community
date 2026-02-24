@@ -88,24 +88,6 @@ function get_insert_results(records, table_name) {
  */
 
 /**
- * 合并查询结果列表
- * 
- * @template T, U
- * @param {T[]} list 需要查询的对象 
- * @param {(targets: T[]) => U} callback 查询的回调函数
- * @returns {U[]} 合并后的结果
- */
-function result_merger(list, callback) {
-    const SBC = SingleBatchCount;
-
-    const groups = split_group(list, SBC);
-
-    return groups.map(group => {
-        return callback(group);
-    }).flat(2);
-}
-
-/**
  * 注册用户
  * 
  * @param {RegisterUser} target 用户列表
@@ -1132,7 +1114,7 @@ export function get_group_list_by_user_id(
             }
         }
     ).flat(3);
-    
+
     return records.map(record => ({
         "member_id": record.id,
         "user_id": record.user_id,
