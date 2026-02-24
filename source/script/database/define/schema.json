@@ -1,6 +1,6 @@
 [
-        {
-        "file": "./assets/database/community.db",
+    {
+        "file": "./assets/database.db",
         "flags": [
             "enable-wal-mode"
         ],
