@@ -23,7 +23,7 @@
   "type": "module",
   "main": "./source/main.js",
   "scripts": {
-    "db:init": "node ./source/script/database/initialize.js"
+    "db:init": "node ./source/scripts/database/initialize.js"
   },
   "dependencies": {
     "@types/better-sqlite3": "^7.6.13",
