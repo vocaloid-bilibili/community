@@ -1,44 +1,44 @@
 {
-  "name": "vocacili-api-service",
-  "version": "2.0.0",
-  "description": "这是一个使用 Node.js 开发的 HTTP 服务器。",
-  "keywords": [
-    "Node.js",
-    "Better-SQLite3",
-    "SQLite",
-    "SQLite3",
-    "VOCALOID",
-    "VocaBili"
-  ],
-  "homepage": "https://github.com/ETeyondLitle0721/vocabili-api-service#readme",
-  "bugs": {
-    "url": "https://github.com/ETeyondLitle0721/vocabili-api-service/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ETeyondLitle0721/vocabili-api-service.git"
-  },
-  "license": "MIT",
-  "author": "ETeyondLitle0721 <eteyondlitle@gmail.com>",
-  "type": "module",
-  "main": "./source/main.js",
-  "scripts": {
-    "db:init": "node ./source/scripts/database/initialize.js"
-  },
-  "dependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/express": "^5.0.3",
-    "axios": "^1.11.0",
-    "better-sqlite3": "^12.2.0",
-    "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.3",
-    "winston": "^3.17.0",
-    "winston-daily-rotate-file": "^5.0.0",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.10",
-    "webpack": "^5.99.9",
-    "webpack-cli": "^6.0.1"
-  }
+    "name": "vocacili-api-service",
+    "version": "2.0.0",
+    "description": "这是一个使用 Node.js 开发的 HTTP 服务器。",
+    "keywords": [
+        "Node.js",
+        "Better-SQLite3",
+        "SQLite",
+        "SQLite3",
+        "VOCALOID",
+        "VocaBili"
+    ],
+    "homepage": "https://github.com/ETeyondLitle0721/vocabili-api-service#readme",
+    "bugs": {
+        "url": "https://github.com/ETeyondLitle0721/vocabili-api-service/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/ETeyondLitle0721/vocabili-api-service.git"
+    },
+    "license": "MIT",
+    "author": "ETeyondLitle0721 <eteyondlitle@gmail.com>",
+    "type": "module",
+    "main": "./source/main.js",
+    "scripts": {
+        "db:init": "node ./source/scripts/database/initialize.js"
+    },
+    "dependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/express": "^5.0.3",
+        "axios": "^1.11.0",
+        "better-sqlite3": "^12.2.0",
+        "express": "^5.1.0",
+        "jsonwebtoken": "^9.0.3",
+        "winston": "^3.17.0",
+        "winston-daily-rotate-file": "^5.0.0",
+        "xlsx": "^0.18.5"
+    },
+    "devDependencies": {
+        "@types/jsonwebtoken": "^9.0.10",
+        "webpack": "^5.99.9",
+        "webpack-cli": "^6.0.1"
+    }
 }
