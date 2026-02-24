@@ -1,17 +1,4 @@
 {
-    "database": {
-        "default": {
-            "path": "./assets/database/default.db",
-            "schema": "./source/define/database/schema.json"
-        },
-        "problem": {
-            "path": "./assets/database/problem.db",
-            "schema": "./source/define/database/schema.json"
-        },
-
-        "currnet": "problem"
-    },
-
     "servive": {
         "host": "127.0.0.1",
         "port": 51001,
@@ -20,6 +7,17 @@
             "methods": [
                 "GET", "POST"
             ]
+        }
+    },
+
+    "databases": {
+        "production": {
+            "filepath": "./assets/database/production.db",
+            "schema": "./source/database/define/schema.json"
+        },
+        "development": {
+            "filepath": "./assets/database/development.db",
+            "schema": "./source/database/define/schema.json"
         }
     }
 }

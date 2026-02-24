@@ -1,26 +1,10 @@
 import jwt from "jsonwebtoken";
-import path from "path";
 import crypto from "node:crypto";
-import SQLite3 from "better-sqlite3";
-import { split_group } from "../../depend/toolkit.js";
-import { DatabaseOperator } from "../../depend/database/operator.js";
-
-const root = path.resolve(".");
-
-const filepath = path.join(
-    root, "./assets/database/community.db"
-);
-
-const instance = new SQLite3(filepath, {
-    "timeout": 5000, "readonly": false
-});
-
-const operator = new DatabaseOperator(instance);
+import { operator } from "../database/toolkit.js";
 
 const HMAC_Key = process.env.VCS_HMAC_KEY;
 const JWT_Secret = process.env.VCS_JWT_SECRET;
 const RefreshTokenPrefix = "refresh-token-";
-const SingleBatchCount = 256;
 
 /**
  * 为密码生成散列值

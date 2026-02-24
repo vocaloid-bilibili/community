@@ -1,28 +1,23 @@
+import fs from "fs";
 import path from "path";
-import SQLite3 from "better-sqlite3";
-import schema from "./define/schema.json" with { "type": "json" };
+import { self, filepath, operator } from "../../database/toolkit.js";
 import console from "../../depend/toolkit/console.js";
 import * as parameter from "../../depend/utilities/sequence/parameter.js";
-import { DatabaseOperator } from "../../depend/database/operator.js";
 
 const root = path.resolve(".");
 const shell = parameter.parse(
     process.argv.slice(2)
 );
 
-for (let index = 0; index < schema.length; index++) {
-    const current = schema[index];
-    const { file, flags = [], targets, options } = current;
+const schemas = [ JSON.parse(fs.readFileSync(
+    path.join(root, self.schema), "UTF-8")) ];
 
-    const filepath = path.resolve(root, file);
+for (let index = 0; index < schemas.length; index++) {
+    const current = schemas[index];
+
+    const { flags = [], targets, options } = current;
 
     console.tlog(`创建数据库: ${filepath}。`);
-
-    const instance = new SQLite3(filepath, {
-        "timeout": 5000, "readonly": false
-    });
-
-    const operator = new DatabaseOperator(instance);
 
     if (flags.includes("enable-wal-mode")) {
         console.tlog("启用 WAL 模式。");
