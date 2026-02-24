@@ -1,6 +1,7 @@
 import SQLite3 from "better-sqlite3";
 
 import * as ViewModel from "./model/view.js";
+import * as ToolModel from "./model/tool.js";
 import * as IndexModel from "./model/index.js";
 import * as TableModel from "./model/table.js";
 import * as RecordModel from "./model/record.js";
@@ -12,6 +13,7 @@ import * as TransactionModel from "./model/transaction.js";
 
 const get_generator = () => ({
     "view": ViewModel,
+    "tool": ToolModel,
     "index": IndexModel,
     "point": SavepointModel,
     "pragma": PragmaModel,
@@ -90,7 +92,7 @@ export class DatabaseOperator {
             if (length === 0) {
                 return [ getter() ];
             }
-            
+
             if (!Array.isArray(parameters)) {
                 parameters = [ parameters ];
             }
@@ -313,6 +315,31 @@ export class DatabaseOperator {
         handler = handler.bind(record.select);
 
         const args = [ table, where, options ];
+
+        return this.#process(
+            handler, args, reviewer
+        );
+    }
+
+    /**
+     * 查询已存在的记录
+     * 
+     * @param {any[][]} params_list 查询参数的列表列表
+     * @param {object} options 查询配置
+     * @param {Function} reviewer 语句生成结果审查函数
+     * @returns 执行结果
+     */
+    select_record_union(params_list, options, reviewer) {
+        options ??= {};
+        options.mode ??= "regular";
+
+        const record = this.generator.record;
+
+        let handler = record.selects[options.mode];
+
+        handler = handler.bind(record.select);
+
+        const args = [ params_list, options ];
 
         return this.#process(
             handler, args, reviewer
@@ -898,8 +925,6 @@ export class DatabaseOperator {
      * @returns 执行结果
      */
     request_sentence(sentence, parameter = {}) {
-        handler ??= ster();
-
         const handler = () => ({
             "action": "request",
             sentence, parameter
@@ -916,8 +941,6 @@ export class DatabaseOperator {
      * @returns 执行结果
      */
     execute_sentence(sentence, parameter = {}) {
-        handler ??= ster();
-
         const _handler = () => ({
             "action": "execute",
             sentence, parameter
@@ -934,8 +957,6 @@ export class DatabaseOperator {
      * @returns 执行结果
      */
     request_single_sentence(sentence, parameter = {}) {
-        handler ??= ster();
-
         const _handler = () => ({
             "action": "single",
             sentence, parameter
@@ -952,8 +973,6 @@ export class DatabaseOperator {
      * @returns 执行结果
      */
     execute_iterate_sentence(sentence, parameter = {}) {
-        handler ??= ster();
-
         const _handler = () => ({
             "action": "iterate",
             sentence, parameter
@@ -997,6 +1016,22 @@ export class DatabaseOperator {
         const handler = abstract.case.single;
 
         return handler(column, mapping, options);
+    }
+
+    /**
+     * 将绑定在参数对象中的参数以安全的形式嵌入到 SQL 语句当中
+     * * 仅支持本代码库所自动生成的形式的嵌入
+     * 
+     * @param {string} sentence 需要处理的 SQL 语句 
+     * @param {Record<string, any>} params 包含绑定的参数的对象
+     * @returns {string} 将参数内嵌在 SQL 语句中的形式
+     */
+    tool_builtin_sentence_params(sentence, params) {
+        const { tool: handlers } = this.generator;
+
+        const handler = handlers.sentence.builtin;
+
+        return handler(sentence, params);
     }
 
     /**
@@ -1091,6 +1126,8 @@ export class DatabaseOperator {
      * @property {DbOpor["insert_record"]} insert 插入记录
      * @property {DbOpor["delete_record"]} delete 删除记录
      * @property {DbOpor["select_record"]} select 查询记录
+     * @property {Object} union 合并查询
+     * @property {DbOpor["select_record_union"]} union.select 合并查询
      * 
      * @returns {RecordColler} 记录控制器
      */
@@ -1100,8 +1137,17 @@ export class DatabaseOperator {
             "select", "count"
         ];
 
-        return this.#get_handlers(
-            "record", operates
+        const handlers =
+            this.#get_handlers(
+                "record", operates
+            );
+
+        const append = { "union": { "select":
+            this.select_record_union.bind(this)
+        }};
+
+        return Object.assign(
+            {}, handlers, append
         );
     }
 

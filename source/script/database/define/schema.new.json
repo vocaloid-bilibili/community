@@ -1,0 +1,1281 @@
+[
+    {
+        "file": "./assets/database/platform.db",
+        "flags": [
+            "enable-wal-mode"
+        ],
+        "targets": [
+            "table", "index"
+        ], 
+        "options": {
+            "tables": [
+                {
+                    "name": "videos",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "exterior",
+                                "type": "text",
+                                "flags": [
+                                    "not-null", "unique"
+                                ]
+                            },
+                            {
+                                "name": "title",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "uploader_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "duration",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "page_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "thumbnail",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "update_count",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "published_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "updated_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "recorded_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "uploaders",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "exterior",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null", "unique"
+                                ]
+                            },
+                            {
+                                "name": "username",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "avatar",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "update_count",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "updated_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "recorded_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "batches",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "video_count",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "started_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "ended_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "recorded_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "snapshots",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "video_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null", "unique"
+                                ]
+                            },
+                            {
+                                "name": "count_view",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "count_like",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "count_coin",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "count_favorite",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "batch_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "snapshot_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "recorded_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "groups",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "desc",
+                                "type": "text"
+                            },
+                            {
+                                "name": "count",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "modified_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "video_group",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "vid",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "gid",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_expried",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "uploader_group",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "uid",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "gid",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_expried",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ],
+            "indexes": []
+        }
+    },
+
+    {
+        "file": "./assets/database/community.db",
+        "flags": [
+            "enable-wal-mode"
+        ],
+        "targets": [
+            "table", "index"
+        ],
+        "options": {
+            "tables": [
+                {
+                    "name": "users",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "nickname",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "username",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "email",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "avatar",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "password",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_vip",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "role",
+                                "type": "text",
+                                "default": "user"
+                            },
+                            {
+                                "name": "status",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "last_login_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                
+                {
+                    "name": "vip_users",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "is_pay",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "operator_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "user_marks",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "user_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "mark_id",
+                                "type": "text"
+                            },
+                            {
+                                "name": "status",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "expried_at",
+                                "type": "text"
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "groups",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "type",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "desc",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "modified_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "user_groups",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "user_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "group_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_expried",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "comments",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "page",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "user_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }, 
+                            {
+                                "name": "root_id",
+                                "type": "integer"
+                            },
+                            {
+                                "name": "is_pinned",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "pin_order",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "like_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "mark_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "reply_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "content",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "modified_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "status",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "comment_pins",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "comment_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_expried",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "operator_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "comment_likes",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "user_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "comment_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_expried",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "comment_marks",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "user_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "comment_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_expried",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ],
+            "indexes": []
+        }
+    },
+
+    {
+        "file": "./assets/database/vote.db",
+        "flags": [
+            "enable-wal-mode"
+        ],
+        "targets": [
+            "table", "index"
+        ],
+        "options": {
+            "tables": [
+                {
+                    "name": "boards",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_anonymous",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "choose_count",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "total_score",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "participant_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "vote_total_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "option_count",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "creator_id",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "started_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "ended_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "borad_voters",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "board_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "group_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "is_expried",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "board_options",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "board_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "name",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "desc",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "score",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "participant_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "vote_total_count",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "status",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "voter_weight",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "user_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "board_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "weight",
+                                "type": "integer",
+                                "default": 0
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+
+                {
+                    "name": "board_votes",
+                    "options": {
+                        "flags": [
+                            "if-not-exists"
+                        ],
+                        "column": [
+                            {
+                                "name": "id",
+                                "type": "integer",
+                                "flags": [
+                                    "primary-key",
+                                    "auto-increment"
+                                ]
+                            },
+                            {
+                                "name": "board_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "user_id",
+                                "type": "integer",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            },
+                            {
+                                "name": "status",
+                                "type": "integer",
+                                "default": 1
+                            },
+                            {
+                                "name": "expired_at",
+                                "type": "text"
+                            },
+                            {
+                                "name": "created_at",
+                                "type": "text",
+                                "flags": [
+                                    "not-null"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ],
+            "indexes": []
+        }
+    }
+]

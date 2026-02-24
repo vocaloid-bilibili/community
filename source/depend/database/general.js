@@ -217,7 +217,7 @@ export const parse = {
 
                 result.push(`${column} ${prefix}IN ( ${list.join(", ")} )`);
             }
-
+            
             return result;
         },
 

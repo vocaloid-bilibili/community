@@ -118,7 +118,7 @@ const inner = {
                 parts.push("AUTOINCREMENT");
             }
 
-            if (options.default) {
+            if ("default" in options) {
                 let value = options.default;
 
                 const mapping = {
@@ -226,8 +226,8 @@ export function create(table, options) {
     if (options.restrict) {
         const restrict = options.restrict;
 
-        let { unique, primary } = restrict;
         let { check, foreign } = restrict;
+        let { unique, primary } = restrict;
 
         const pack = gepend.build.tuple_literal;
 

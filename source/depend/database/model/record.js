@@ -252,8 +252,10 @@ export const select = {
     regular(table, where, options = {}) {
         const parameter = {};
 
-        const getter = gepend.inner.getter();
-        const setter = gepend.inner.setter(parameter);
+        options.getter ??= gepend.inner.getter();
+        options.setter ??= gepend.inner.setter(parameter);
+
+        const { setter, getter } = options;
 
         if (Object.keys(where).length > 0) {
             options.where = where;
@@ -443,6 +445,50 @@ function _delete(table, where = {}, options = {}) {
 
 export { _delete as delete };
 
+export const selects = {
+    /**
+     * 查询记录（返回结果数组）
+     * 
+     * @param {any[][]} params_list 参数列表的列表
+     * @param {object} options 查询配置
+     * @returns 查询结果
+     */
+    regular(params_list, options = {}) {
+        const parameter = {};
+        const { unique = false } = options;
+
+        const getter = gepend.inner.getter();
+        const setter = gepend.inner.setter(parameter);
+
+        const sentences = [];
+
+        let last_result;
+
+        for (let index = 0; index < params_list.length; index++) {
+            const params = params_list[index];
+
+            params[2] ??= {};
+
+            params[2].getter = getter;
+            params[2].setter = setter;
+
+            last_result = select.regular(...params);
+
+            const { sentence } = last_result;
+
+            sentences.push(sentence);
+        }
+
+        last_result.parameter = parameter;
+
+        last_result.sentence = sentences.map(
+            (current) => `SELECT * FROM ( ${current} )`
+        ).join(` ${unique ? "UNION" : "UNION ALL"} `);
+        
+        return last_result;
+    },
+};
+
 /**
  * 更新数据库中的现有记录
  * 
@@ -460,12 +506,12 @@ export function update(table, where, data, options = {}) {
     const getter = gepend.inner.getter();
     const setter = gepend.inner.setter(parameter);
 
-    const inner = { getter, setter };
-
     const parts = [], entries = Object.entries(data);
 
     const quoter = depend.inner.column_quote;
     const holder = depend.inner.holder(setter, getter);
+
+    const inner = { getter, setter, holder };
 
     for (let index = 0; index < entries.length; index++) {
         const entry = entries[index];
