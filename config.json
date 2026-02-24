@@ -1,23 +1,4 @@
 {
-    "service": {
-        "define": "./source/define/service.json",
-        "options": {
-            "default": {
-                "host": "127.0.0.1",
-                "port": 51001,
-                "cors": {
-                    "origin": "*",
-                    "methods": [
-                        "GET", "POST"
-                    ]
-                }
-            }
-        }
-    },
-    "language": {
-        "default": "zh-HK",
-        "filepath": "./source/define/language.json"
-    },
     "database": {
         "default": {
             "path": "./assets/database/default.db",
@@ -26,6 +7,19 @@
         "problem": {
             "path": "./assets/database/problem.db",
             "schema": "./source/define/database/schema.json"
+        },
+
+        "currnet": "problem"
+    },
+
+    "servive": {
+        "host": "127.0.0.1",
+        "port": 51001,
+        "cors": {
+            "origin": "*",
+            "methods": [
+                "GET", "POST"
+            ]
         }
     }
 }
