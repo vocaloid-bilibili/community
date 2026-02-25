@@ -5,18 +5,16 @@
     "keywords": [
         "Node.js",
         "Better-SQLite3",
-        "SQLite",
-        "SQLite3",
         "VOCALOID",
         "VocaBili"
     ],
-    "homepage": "https://github.com/ETeyondLitle0721/vocabili-api-service#readme",
+    "homepage": "https://github.com/vocaloid-bilibili/community-service#readme",
     "bugs": {
-        "url": "https://github.com/ETeyondLitle0721/vocabili-api-service/issues"
+        "url": "https://github.com/vocaloid-bilibili/community-service/issues"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/ETeyondLitle0721/vocabili-api-service.git"
+        "url": "git+https://github.com/vocaloid-bilibili/community-service.git"
     },
     "license": "MIT",
     "author": "ETeyondLitle0721 <eteyondlitle@gmail.com>",
