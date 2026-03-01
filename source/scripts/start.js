@@ -421,7 +421,6 @@ app.get("/guest/verify-code", (request, response) => {
 app.get("/user/token/access", (request, response) => {
     const now_ts = Date.now();
 
-
 });
 
 app.get("/user/token/refresh", (request, response) => {
@@ -430,21 +429,20 @@ app.get("/user/token/refresh", (request, response) => {
 
 });
 
-app.delete("/user/token/refresh", (request, response) => {
-    const now_ts = Date.now();
-
-    const { token } = request;
-
-    if (token.type !== "user") {
-        return response.send({
-            "status": "failure",
-            "code": "invalid_token_type",
-            "msg": "无效的令牌类型"
-        });
-    }
-
-    const { aud } = token;
-
+/**
+ * 
+ * @typedef {Object} Audience
+ * @property {string} code 用户组标识符
+ * @property {number} exp 分组过期时间
+ * 
+ * @typedef {Parameters<Parameters<
+ *  app["get"]>[1]>[1]} Response
+ * 
+ * @param {Audience[]} aud 用户组
+ * @param {Response} response 响应
+ * @returns 检查结果
+ */
+function check_admin(aud, response) {
     const admin = aud.findLast(
         ({ code }) => code === "admin"
     );
@@ -463,6 +461,30 @@ app.delete("/user/token/refresh", (request, response) => {
             "code": "admin_expired",
             "msg": "管理员身份已过期"
         });
+    }
+
+    return "pass";
+}
+
+app.delete("/user/token/refresh", (request, response) => {
+    const now_ts = Date.now();
+
+    const { token } = request;
+
+    if (token.type !== "user") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token_type",
+            "msg": "无效的令牌类型"
+        });
+    }
+
+    const { aud } = token;
+
+    if (check_admin(
+        aud, response
+    ) !== "pass") {
+        return;
     }
 
     const { query } = request;
@@ -508,7 +530,7 @@ app.delete("/user/token/refresh", (request, response) => {
         "revoke_refresh_token"
     ];
 
-    const result = community.revoke_refresh_token({
+    const result = community[methods[0]]({
         "reason_id": +query.reason_id,
         "revoked_at": new Date(now_ts),
         "revoker_id": user_id,
@@ -524,3 +546,87 @@ app.delete("/user/token/refresh", (request, response) => {
         "msg": "刷新令牌吊销成功"
     });
 });
+
+app.patch("/user/:user_id/:field_name", (request, response, next) => {
+    const now_ts = Date.now();
+
+    if (!request.params.user_id.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_user_id",
+            "msg": "请提供用户标识符"
+        });
+    }
+
+    if (is_positive_integer_like(
+        request.params.user_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_user_id",
+        "msg": "无效的用户标识符"
+    });
+
+    const { params } = request;
+
+    if (!params.field_name.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_field_name",
+            "msg": "请提供字段名称"
+        });
+    }
+
+    const field = params.field_name.toLowerCase(0);
+
+    if (field === "email" || field === "password") {
+        return next();
+    }
+
+    const list = [
+        "username", "nickname"
+    ];
+
+    if (!list.includes(field)) {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_field_name",
+            "msg": "无效的字段名称"
+        });
+    }
+
+    const { token } = request;
+    
+    const { aud, sub } = token;
+    const user_id = +sub.slice(
+        sub.indexOf("_") + 5
+    );
+
+    if (user_id !== +params.user_id) {
+        if (check_admin(
+            aud, response
+        ) !== "pass") {
+            return;
+        }
+    }
+
+    const methods = [
+        "update_user_infocard"
+    ];
+
+    const results = community[methods[0]]({
+        "field_name": field,
+        "operated_at": new Date(now_ts),
+        "operator_id": user_id,
+        "user_id": +params.user_id,
+        "new_value": request.query.value
+    });
+
+    return response.send({
+        "status": "success",
+        "data": {
+            "change_id": results.change.change_id,
+            "changed_at": results.change.operated_at
+        },
+        "msg": "用户信息卡片更新成功"
+    });
+})
