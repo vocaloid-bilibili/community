@@ -442,7 +442,7 @@ app.get("/user/token/refresh", (request, response) => {
  * @param {Response} response 响应
  * @returns 检查结果
  */
-function check_admin(aud, response) {
+function check_perms(aud, response) {
     const admin = aud.findLast(
         ({ code }) => code === "admin"
     );
@@ -466,6 +466,18 @@ function check_admin(aud, response) {
     return "pass";
 }
 
+/**
+ * 解析用户标识符
+ * 
+ * @param {string} sub 主题
+ * @returns {number} 用户标识符
+ */
+function get_user_id(sub) {
+    return +sub.slice(
+        sub.indexOf("_") + 1
+    );
+}
+
 app.delete("/user/token/refresh", (request, response) => {
     const now_ts = Date.now();
 
@@ -481,7 +493,7 @@ app.delete("/user/token/refresh", (request, response) => {
 
     const { aud } = token;
 
-    if (check_admin(
+    if (check_perms(
         aud, response
     ) !== "pass") {
         return;
@@ -522,9 +534,7 @@ app.delete("/user/token/refresh", (request, response) => {
     });
 
     const { sub } = token;
-    const user_id = +sub.slice(
-        sub.indexOf("_") + 5
-    );
+    const user_id = get_user_id(sub);
 
     const methods = [
         "revoke_refresh_token"
@@ -597,12 +607,10 @@ app.patch("/user/:user_id/:field_name", (request, response, next) => {
     const { token } = request;
     
     const { aud, sub } = token;
-    const user_id = +sub.slice(
-        sub.indexOf("_") + 5
-    );
+    const user_id = get_user_id(sub);
 
     if (user_id !== +params.user_id) {
-        if (check_admin(
+        if (check_perms(
             aud, response
         ) !== "pass") {
             return;
@@ -629,4 +637,119 @@ app.patch("/user/:user_id/:field_name", (request, response, next) => {
         },
         "msg": "用户信息卡片更新成功"
     });
-})
+});
+
+app.get("/user/:user_id", (request, response) => {
+    const { token } = request;
+
+    if (token.type !== "user") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token_type",
+            "msg": "无效的令牌类型"
+        });
+    }
+
+    if (!request.params.user_id.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_user_id",
+            "msg": "请提供用户标识符"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        request.params.user_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_user_id",
+        "msg": "无效的用户标识符"
+    });
+
+    const results = community.get_user(
+        parseInt(request.params.user_id)
+    );
+
+    if (results === undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "user_not_exist",
+            "msg": "目标账户不存在"
+        });
+    }
+
+    if (results.is_deleted) {
+        return response.send({
+            "status": "failure",
+            "code": "user_deleted",
+            "msg": "目标账户已被删除"
+        });
+    }
+
+    if (results.status !== "normal") {
+        if (results.status === "banned") {
+            return response.send({
+                "status": "failure",
+                "code": "user_banned",
+                "msg": "目标账户已被封禁"
+            });
+        } else return response.send({
+            "status": "failure",
+            "code": "user_status_exception",
+            "msg": "目标账户状态异常"
+        });
+    }
+
+    const { query } = request;
+
+    const shows = [];
+
+    if (query.email.trim()) {
+        const { email } = query;
+
+        const text = email.toLowerCase();
+
+        const { aud, sub } = request.token;
+        const user_id = get_user_id(sub);
+
+        const { params } = request;
+
+        if (text === "include") {
+            if (user_id !== +params.user_id) {
+                if (check_perms(
+                    aud, response
+                ) !== "pass") {
+                    return;
+                }
+            }
+
+            shows.push("email");
+        } else  {
+            if (text !== "exclude") { 
+                return response.send({
+                    "status": "failure",
+                    "code": "invalid_email_display_mode",
+                    "msg": "无效的用户邮箱地址显示模式"
+                });
+            }
+        }
+    }
+
+    const { created_at, last_login_at, modified_at } = results;
+    
+    return response.send({
+        "status": "success",
+        "data": Object.assign({}, {
+            "username": results.username,
+            "nickname": results.nickname,
+            "description": results.description,
+            "last_login_at": last_login_at ? 
+                last_login_at.toISOString() : null,
+            "registered_at": created_at.toISOString(),
+            "infocard_updated_at": modified_at ?
+                modified_at.toISOString() : null
+        }, shows.includes("email") ? {
+            "email": results.email
+        } : {}),
+    });
+});
