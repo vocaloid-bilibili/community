@@ -24,10 +24,12 @@
         "db:init": "node ./source/scripts/database/initialize.js"
     },
     "dependencies": {
+        "@napi-rs/canvas": "^0.1.95",
         "@types/better-sqlite3": "^7.6.13",
         "@types/express": "^5.0.3",
         "axios": "^1.11.0",
         "better-sqlite3": "^12.2.0",
+        "cors": "^2.8.6",
         "express": "^5.1.0",
         "jsonwebtoken": "^9.0.3",
         "winston": "^3.17.0",
@@ -36,6 +38,7 @@
     },
     "devDependencies": {
         "@types/jsonwebtoken": "^9.0.10",
+        "nan": "^2.25.0",
         "webpack": "^5.99.9",
         "webpack-cli": "^6.0.1"
     }

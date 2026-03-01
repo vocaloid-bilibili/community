@@ -3,6 +3,11 @@
 ## 通用接口
 
 - default_merger $\checkmark$
+- get_insert_results $\checkmark$
+- get_update_results $\checkmark$
+- get_delete_results $\checkmark$
+- get_hmac_password $\checkmark$
+
 
 ## 社区系统后端接口
 
@@ -21,7 +26,6 @@
         - update_nicknames $\checkmark$
         - update_emails $\checkmark$
         - update_passwords $\checkmark$
-        - update_avatars $\checkmark$
         - update_descriptions $\checkmark$
 
     - get_users $\checkmark$
@@ -41,14 +45,3 @@
 
 - access_tokens $\checkmark$
     - create_access_tokens $\checkmark$
-
-### 评论子模块
-
-- create_comments $\checkmark$
-- create_replies $\checkmark$
-- likes $\checkmark$
-    - like_comments $\checkmark$
-    - delete_like_comments $\checkmark$
-    - dislike_comments $\checkmark$
-    - undislike_comments $\checkmark$
-    - get_comment_like_lists $\checkmark$

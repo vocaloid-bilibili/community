@@ -1,10 +1,94 @@
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
+import node_canvas from "@napi-rs/canvas";
 import { operator } from "../database/toolkit.js";
 
 const HMAC_Key = process.env.VCS_HMAC_KEY;
 const JWT_Secret = process.env.VCS_JWT_SECRET;
+const DefaultIssuer = "VBS-Community";
 const RefreshTokenPrefix = "refresh-token-";
+
+/**
+ * 生成验证码图片
+ * 
+ * @param {string} number 随机整数（000000 - 999999）
+ * @returns {Buffer} 图片 PNG 数据
+ */
+export function generate_verify_code_image(number) {
+    const colors = [ "red", "pink", "blue", "green", "black", "cyan", "orange" ];
+    const styles = [ "normal", "bold", "italic", "underline", "strikethrough" ];
+    const fonts = [ "Arial", "Times", "'New Roman'", "'Courier New'", "微软雅黑", "宋体" ];
+
+    const width_px = 120, height_px = 40;
+
+    const canvas = node_canvas
+        .createCanvas(width_px, height_px);
+
+    const context = canvas.getContext("2d");
+
+    context.fillStyle = "#f0f0f0";
+    context.fillRect(0, 0, width_px, height_px);
+
+    const left_middle = {
+        "x": width_px / 8, "y": height_px / 4
+    };
+
+    const step_length = width_px * 3 / 26 * 1.1;
+
+    const pick = (array) => {
+        const random = Math.random();
+
+        return array[parseInt(
+            array.length * random
+        )];
+    };
+
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+
+    const rdm = () => Math.random();
+
+    for (let index = 0; index < 15; index++) {
+        context.strokeStyle = `rgb(${rdm() * 255},${rdm() * 255},${rdm() * 255})`;
+        context.beginPath();
+
+        context.moveTo(rdm() * width_px, rdm() * height_px);
+        context.lineTo(rdm() * width_px, rdm() * height_px);
+
+        context.stroke();
+    }
+
+    for (let index = 0; index < 90; index++) {
+        context.fillStyle = `rgb(${rdm() * 255},${rdm() * 255},${rdm() * 255})`;
+        context.beginPath();
+        
+        context.arc(rdm() * width_px, rdm() * height_px, 1, 0, Math.PI * 2);
+        context.fill();
+    }
+
+    const text = number.toString().slice(0, 6).padStart(6, "0");
+
+    for (let index = 0; index < text.length; index++) {
+        const char = text[index];
+
+        let { x } = left_middle;
+
+        x += 5 + step_length * index;
+
+        const color = pick(colors);
+        const style = pick(styles);
+        const font = pick(fonts);
+
+        context.font = `${style} 32px ${font}`;
+        context.fillStyle = color;
+        
+        context.fillText(
+            char, x, height_px / 2
+        );
+    }
+
+    return canvas.toBuffer("image/png");
+}
 
 /**
  * 为密码生成散列值
@@ -37,8 +121,8 @@ const default_merger = (defaults, current) => {
 /**
  * 获取批量插入的返回结果
  * 
- * @param {object[]} records 需要出入的纪录列表
- * @param {string} table_name 需要出入的表的名称
+ * @param {object[]} records 需要插入的记录列表
+ * @param {string} table_name 需要插入的表的名称
  * @returns {object[]} 返回结果
  */
 function get_insert_results(records, table_name) {
@@ -54,14 +138,55 @@ function get_insert_results(records, table_name) {
 }
 
 /**
+ * 获取删除的返回结果
+ * 
+ * @param {object} where 需要删除的纪录的条件
+ * @param {string} table_name 需要删除的表的名称
+ * @returns {object[]} 返回结果
+ */
+function get_delete_results(where, table_name) {
+    const field_list = "all";
+
+    const record = operator.record();
+    const _delete = record.delete.bind(record);
+
+    return _delete(table_name, where, {
+        "action": "execute",
+        "return_field": field_list
+    }).flat(3);
+}
+
+/**
+ * 获取删除的返回结果
+ * 
+ * @param {object} where 需要更新的纪录的条件
+ * @param {string} table_name 需要更新的表的名称
+ * @param {object} object 需要更新的字段集合
+ * @returns {object[]} 返回结果
+ */
+function get_update_results(where, table_name, object) {
+    const field_list = "all";
+
+    const record = operator.record();
+    const update = record.update.bind(record);
+
+    return update(table_name, where, object, {
+        "action": "execute", "return_field": field_list
+    }).flat(3);
+}
+
+/**
  * @typedef {Object} RegisterUser
  * @property {string} username 账户名称
  * @property {string} nickname 用户昵称
  * @property {string} email 邮箱地址
  * @property {string} password 用户密码
- * @property {string} avatar 用户头像
  * @property {string} [description] 用户简介
- * @property {Date} [created_at] 创建时间
+ * @property {Date} created_at 创建时间
+ * @property {Date} [last_login_at] 最后登录时间
+ * @property {Date} [modified_at] 资料卡最后修改时间
+ * @property {boolean} is_deleted 是否已删除账户
+ * @property {("normal"|"banned")} [status] 用户状态
  * 
  * @typedef {Object} RUTFix
  * @property {string} password 经过HMAC处理的密码
@@ -72,36 +197,101 @@ function get_insert_results(records, table_name) {
  */
 
 /**
+ * 转换数据库记录为UserRecord
+ * 
+ * @param {object} record 需要转换的记录
+ * @returns {UserRecord} 转换结果
+ */
+function convert_user_record(record) {
+    record.user_id = record.id;
+
+    delete record.id;
+
+    const restore =
+        restore_at_fields;
+
+    return restore(record);
+}
+
+/**
+ * 修改字段名称以 _at 结尾的字段值为 RFC 3339 字符串
+ * 
+ * @template T
+ * @param {T} record 需要转换的记录
+ * @returns {T} 转换结果
+ */
+function convert_at_fields(record) {
+    return Object.fromEntries(
+        Object.entries(record).map(
+            ([field, value]) => {
+                if (value !== null) {
+                    if (field.endsWith("_at")) {
+                        value = new Date(value);
+                    }
+                }
+
+                return [ field, value ];
+            }
+        )
+    );
+}
+
+/**
+ * 还原字段名称以 _at 结尾的字段值为 RFC 3339 字符串的字段为 Date 对象
+ * 
+ * @param {object} record 需要转换的记录
+ * @returns {object} 转换结果
+ */
+function restore_at_fields(record) {
+    return Object.fromEntries(
+        Object.entries(record).map(
+            ([field, value]) => {
+                if (value !== null) {
+                    if (field.endsWith("_at")) {
+                        value = new Date(value);
+                    }
+                }
+
+                return [ field, value ];
+            }
+        )
+    );
+}
+
+/**
  * 注册用户
  * 
- * @param {RegisterUser} target 用户列表
+ * @param {RegisterUser} user 用户列表
  * @param {RegisterUser} defaults 默认值集合
  * @param {typeof default_merger} merger 属性合并器
  * @returns {UserRecord} 用户记录
  */
 export function register_user(
-    target, defaults = {}, merger = default_merger
+    user, defaults = {}, merger = default_merger
 ) {
-    if (!target) return null;
+    if (!user) return null;
 
     const records = [];
 
-    let { created_at } = target;
+    let { created_at } = user;
 
     created_at ??= defaults.created_at;
 
     const password = gen_hmac_password(
-        target.password, created_at
+        user.password, created_at
     );
 
-    const modified = {
-        "password": password,
-        "created_at": created_at.toISOString()
+    const modified = { password };
+
+    const target = {
+        ...defaults, ...modified 
     };
 
-    records.push(merger(target, {
-        ...defaults, ...modified 
-    }));
+    const modify = convert_at_fields;
+
+    records.push(modify(
+        merger(user, target)
+    ));
 
     const get_results = get_insert_results;
 
@@ -109,17 +299,295 @@ export function register_user(
         records, "users"
     );
 
-    return results.map((result) => {
-        result.user_id = result.id;
+    const convert = convert_user_record;
 
-        delete result.id;
+    return results.map(convert)[0];
+}
 
-        result.created_at = new Date(
-            result.created_at
-        );
+/**
+ * 获取用户列表
+ * 
+ * @typedef {("username"|"nickname"|"email"|"status")} G4FN
+ * 
+ * @typedef {Object} GULBFields
+ * @property {G4FN} field 查询字段
+ * @property {string[]} values 查询值
+ * 
+ * @param {GULBFields} where 查询条件
+ * @param {number} count 每页历史记录数
+ * @param {number} index 当前页索引（从 1 开始）
+ * @returns {RefreshTokenHistoryList} 带有历史信息的刷新令牌
+ */
+export function get_user_list_by_fields(
+    where, count = 50, index = 1
+) {
+    if (!where) return null;
 
-        return result;
-    })[0];
+    const record = operator.record();
+
+    if (!Array.isArray(where.values)) {
+        where.values = [ where.values ];
+    }
+
+    const results = record.select(
+        "users", {
+            "type": "group",
+            "relation": "and",
+            "children": [
+                {
+                    "type": "unit",
+                    "column": where.field,
+                    "restrict": {
+                        "include": where.values
+                    }
+                }
+            ]
+        }, {
+            "paginate": {
+                "limit": count,
+                "offset": (index - 1) * count
+            }
+        }
+    ).flat(3);
+
+    const convert = convert_user_record;
+
+    return results.map(convert);
+}
+
+/**
+ * 获取用户
+ * 
+ * @param {number} user_id 用户标识符
+ * @returns {UserRecord} 用户记录
+ */
+export function get_user(user_id) {
+    if (!user_id) return null;
+
+    const record = operator.record();
+
+    const results = record.select(
+        "users", {
+            "type": "group",
+            "relation": "and",
+            "children": [
+                {
+                    "type": "unit",
+                    "column": "id",
+                    "restrict": {
+                        "include": [
+                            user_id
+                        ]
+                    }
+                }
+            ]
+        }
+    ).flat(3);
+
+    const convert = convert_user_record;
+
+    return results.map(convert)[0];
+}
+
+/**
+ * @typedef {Object} UpdateUserInfo
+ * @property {number} user_id 用户标识符
+ * @property {Date} operated_at 操作时间
+ * @property {number} operator_id 操作者识别码
+ * @property {string} [comments] 操作注解
+ * 
+ * @typedef {Object} UUPFix
+ * @property {string} password 新密码明文
+ * @property {Date} created_at 账户创建时间
+ * 
+ * @typedef {(UpdateUserInfo & UUPFix)} UpdateUserPassword
+ * 
+ * @typedef {("user_id"|"created_at"|"last_login_at"|
+ *  "modified_at"|"is_deleted"|"status")} UICFNOmitFields
+ * 
+ * @typedef {(keyof Omit<UserRecord, UICFNOmitFields>)} UICFNFields
+ * 
+ * @typedef {Object} UICFix
+ * @property {number} change_id 变更标识符
+ * @property {UICFNFields} field_name 字段名称
+ * @property {string} new_value 新值
+ * @property {string} old_value 旧值
+ * 
+ * @typedef {(UpdateUserInfo & UICFix)} UserInfoChange
+ * 
+ * @typedef {Object} UUPResults
+ * @property {object} record 用户记录
+ * @property {UserRecord} record.new 更新后的记录
+ * @property {UserRecord} record.old 更新前的记录
+ * @property {UserInfoChange} change 变更记录
+ */
+
+/**
+ * 更新用户密码
+ * 
+ * @param {UpdateUserPassword} update 更新信息
+ * @param {UpdateUserPassword} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {UUPResults} 返回结果
+ */
+export function update_user_password(
+    update, defaults = {}, merger = default_merger
+) {
+    if (!update) return null;
+
+    const current = merger(update, defaults);
+
+    const password = gen_hmac_password(
+        current.password, current.created_at
+    );
+
+    const record = operator.record();
+
+    const result_lists = {};
+
+    result_lists.update = record.update(
+        "users", {
+            "type": "group",
+            "relation": "and",
+            "children": [
+                {
+                    "type": "unit",
+                    "column": "id",
+                    "restrict": {
+                        "include": [
+                            user_id
+                        ]
+                    }
+                }
+            ]
+        }, { password }, {
+            "action": "execute",
+            "return_field": "all",
+        }
+    ).flat(3);
+
+    const convert = convert_user_record;
+
+    const modified = convert_at_fields(current);
+
+    const records = [{
+        "user_id": modified.user_id,
+        "operator_id": modified.operator_id,
+        "comments": modified.comments,
+        "operated_at": modified.operated_at,
+        "field_name": "password",
+        "new_value": results[0].password,
+        "old_value": results[0].password
+    }];
+
+    const get_results = get_insert_results;
+
+    result_lists.insert = get_results(
+        records, "user_info_changes"
+    );
+
+    return {
+        "record": result_lists.update.map(convert)[0],
+
+        "change": result_lists.insert.map((record) => {
+            record.change_id = record.id;
+
+            delete record.id;
+
+            return restore_at_fields(record);
+        })
+    };
+}
+
+/**
+ * @typedef {Exclude<UICFNFields, "password">} UUICFNFields
+ * 
+ * @typedef {Object} UUICFix
+ * @property {string} new_value 新值
+ * @property {UUICFNFields} field_name 字段名称
+ * 
+ * @typedef {(UpdateUserInfo & UUICFix)} UpdateUserInfoCard
+ * 
+ * @typedef {UUPResults} UUICResults
+ */
+
+/**
+ * 更新用户信息卡片
+ * 
+ * @param {UpdateUserInfoCard} update 更新信息
+ * @param {UpdateUserInfoCard} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {UUICResults} 返回结果
+ */
+export function update_user_infocard(
+    update, defaults = {}, merger = default_merger
+) {
+    if (!update) return null;
+
+    const current = merger(update, defaults);
+
+    const record = operator.record();
+
+    const new_datas = {
+        [current.field_name]: current.new_value
+    };
+
+    const result_lists = {};
+
+    result_lists.update = record.update(
+        "users", {
+            "type": "group",
+            "relation": "and",
+            "children": [
+                {
+                    "type": "unit",
+                    "column": "id",
+                    "restrict": {
+                        "include": [
+                            user_id
+                        ]
+                    }
+                }
+            ]
+        }, new_datas, {
+            "action": "execute",
+            "return_field": "all",
+        }
+    ).flat(3);
+
+    const convert = convert_user_record;
+
+    const modified = convert_at_fields(current);
+
+    const { field_name } = modified;
+
+    const records = [{
+        "user_id": modified.user_id,
+        "operator_id": modified.operator_id,
+        "comments": modified.comments,
+        "operated_at": modified.operated_at,
+        "field_name": modified.field_name,
+        "new_value": results[0][field_name],
+        "old_value": results[0][field_name]
+    }];
+
+    const get_results = get_insert_results;
+
+    result_lists.insert = get_results(
+        records, "user_info_changes"
+    );
+
+    return {
+        "record": result_lists.update.map(convert)[0],
+
+        "change": result_lists.insert.map((record) => {
+            record.change_id = record.id;
+
+            delete record.id;
+
+            return restore_at_fields(record);
+        })
+    };
 }
 
 /**
@@ -172,7 +640,7 @@ export function create_refresh_token(
     const get_results = get_insert_results;
 
     const results = get_results(
-        records, "tokens"
+        records, "refresh_tokens"
     );
 
     return results.map((result) => {
@@ -240,7 +708,7 @@ export function generate_access_token(
     );
 
     const payload = {
-        "iss": current.issuer || "vocabili-ca",
+        "iss": current.issuer || DefaultIssuer,
         "sub": "user_" + current.user_id,
         "aud": group_list.map((group) => {
             const { code } = user_group;
@@ -249,6 +717,7 @@ export function generate_access_token(
                 get_ts(group.expired_at) : null
             };
         }),
+        "type": "user",
         "iat": get_ts(current.created_at),
         "exp": current.expired_at ?
             get_ts(current.expired_at) : null,
@@ -334,7 +803,7 @@ export function get_refresh_token(token_id) {
     const record = operator.record();
 
     const records = record.select(
-        "tokens", {
+        "refresh_tokens", {
             "type": "group",
             "relation": "and",
             "children": [
@@ -342,7 +811,9 @@ export function get_refresh_token(token_id) {
                     "type": "unit",
                     "column": "id",
                     "restrict": {
-                        "include": token_id
+                        "include": [
+                            token_id
+                        ]
                     }
                 }
             ]
@@ -426,333 +897,6 @@ export function get_refresh_token_history_list_by_token_id(
 }
 
 /**
- * @typedef {Object} CreateComment
- * @property {number} creator_id 创建者识别码
- * @property {number} page_id 所属页面标识符
- * @property {string} content 评论内容
- * @property {Date} created_at 创建时间
- * @property {Date} [modified_at] 修改时间
- * @property {("created"|"modified"|"deleted")} status 评论状态
- * @property {boolean} is_pinned 是否置顶
- * 
- * @typedef {Object} CommentPublicCount
- * @property {number} like_count 点赞数
- * @property {number} mark_count 收藏数
- * @property {number} dislike_count 反对数
- * 
- * @typedef {Object} CommentPublicTotalCount
- * @property {number} total_like_count 点赞数
- * @property {number} total_mark_count 收藏数
- * @property {number} total_dislike_count 反对数
- * 
- * @typedef {Object} CRFix_1
- * @property {number} reply_count 回复数
- * @property {number} comment_id 评论标识符
- * 
- * @typedef {(CommentPublicTotalCount & CommentPublicCount)} CRFix_2
- * 
- * @typedef {(CreateComment & CRFix_1 & CRFix_2)} CommentRecord
- */
-
-/**
- * 创建评论
- * 
- * @param {CreateComment} comment 评论
- * @param {CreateComment} defaults 默认值集合
- * @param {typeof default_merger} merger 属性合并器
- * @returns {CommentRecord} 评论记录
- */
-export function create_comment(
-    comment, defaults = {}, merger = default_merger
-) {
-    if (!comment) return null;
-
-    const records = [];
-
-    const current = merger(comment, defaults);
-    const { created_at, modified_at } = current;
-
-    records.push({
-        "creator_id": current.creator_id,
-        "page_id": current.page_id,
-        "content": current.content,
-        "status": current.status,
-
-        "is_pinned": +current.is_pinned,
-        "created_at": created_at.toISOString(),
-        "modified_at": current.modified_at ? 
-            modified_at.toISOString() : null
-    });
-
-    const get_results = get_insert_results;
-
-    const results = get_results(
-        records, "comments"
-    );
-
-    return results.map((result) => {
-        result.comment_id = result.id;
-
-        delete result.id;
-
-        result.counters = {
-            "mark": result.mark_count,
-            "like": result.like_count,
-            "dislike": result.dislike_count,
-            "reply": result.reply_count,
-
-            "children": {
-                "mark": result.children_mark_count,
-                "like": result.children_like_count,
-                "dislike": result.children_dislike_count
-            }
-        };
-
-        delete result.mark_count;
-        delete result.like_count;
-        delete result.reply_count;
-        delete result.dislike_count;
-
-        delete result.total_mark_count;
-        delete result.total_like_count;
-        delete result.total_dislike_count;
-
-        result.is_pinned = Boolean(
-            result.is_pinned
-        );
-        result.created_at = new Date(
-            result.created_at
-        );
-        result.modified_at = result.modified_at ?
-            new Date(result.modified_at) : null;
-
-        return result;
-    })[0];
-}
-
-/**
- * @typedef {Object} CRFix_3
- * @property {number} comment_id 评论标识符
- * @property {number} parent_id 父级评论标识符
- * @property {number} root_id 顶级评论标识符
- * 
- * @typedef {Object} RRFix
- * @property {number} comment_id 评论标识符
- * 
- * @typedef {(CreateComment & CRFix_3)} CreateReply
- * @typedef {(CreateReply & RRFix & CommentPublicCount)} ReplyRecord
- */
-
-/**
- * 创建回复
- * 
- * @param {CreateReply} reply 回复
- * @param {CreateReply} defaults 默认值集合
- * @param {typeof default_merger} merger 属性合并器
- * @returns {ReplyRecord} 回复记录
- */
-export function create_reply(
-    reply, defaults = {}, merger = default_merger
-) {
-    if (!comment) return null;
-
-    const records = [];
-
-    const current = merger(reply, defaults);
-    const { created_at, modified_at } = current;
-
-    records.push({
-        "creator_id": current.creator_id,
-        "page_id": current.page_id,
-        "parent_id": current.parent_id,
-        "root_id": current.root_id,
-        "content": current.content,
-        "status": current.status,
-
-        "is_pinned": +current.is_pinned,
-        "created_at": created_at.toISOString(),
-        "modified_at": current.modified_at ? 
-            modified_at.toISOString() : null
-    });
-
-    const get_results = get_insert_results;
-
-    const results = get_results(
-        records, "comments"
-    );
-
-    return results.map((result) => {
-        result.comment_id = result.id;
-
-        delete result.id;
-
-        result.counters = {
-            "mark": result.mark_count,
-            "like": result.like_count,
-            "dislike": result.dislike_count
-        };
-
-        delete result.mark_count;
-        delete result.like_count;
-        delete result.dislike_count;
-        delete result.reply_count;
-        delete result.total_mark_count;
-        delete result.total_like_count;
-        delete result.total_dislike_count;
-
-        result.is_pinned = Boolean(
-            result.is_pinned
-        );
-        result.created_at = new Date(
-            result.created_at
-        );
-        result.modified_at = result.modified_at ?
-            new Date(result.modified_at) : null;
-
-        return result;
-    })[0];
-}
-
-/**
- * @typedef {Object} CreatePage
- * @property {number} creator_id 创建者识别码
- * @property {string} name 评论区名称
- * @property {string} code 评论区代号
- * @property {string} [description] 描述
- * @property {Date} created_at 创建时间
- * @property {Date} [modified_at] 元数据修改时间
- * 
- * @typedef {Object} PRFix
- * @property {number} page_id 评论区标识符
- * 
- * @typedef {(CreatePage & PRFix)} PageRecord
- */
-
-/**
- * 创建评论区
- * 
- * @param {CreatePage} page 评论区
- * @param {CreatePage} defaults 默认值集合
- * @param {typeof default_merger} merger 属性合并器
- * @returns {PageRecord} 评论区记录
- */
-export function create_comment_page(
-    page, defaults = {}, merger = default_merger
-) {
-    if (!page) return null;
-
-    const records = [];
-
-    const current = merger(page, defaults);
-    const { created_at, modified_at } = current;
-
-    const modified = {
-        "created_at": created_at.toISOString(),
-        "modified_at": current.modified_at ? 
-            modified_at.toISOString() : null
-    };
-
-    records.push(merger(current, modified));
-
-    const get_results = get_insert_results;
-
-    const results = get_results(
-        records, "comments"
-    );
-
-    return results.map((result) => {
-        result.page_id = result.id;
-
-        delete result.id;
-
-        result.counters = {
-            "current": result.current_count,
-            "deleted": result.deleted_count,
-            "total": result.total_count,
-            "callback": result.callback_count
-        };
-
-        delete result.current_count;
-        delete result.deleted_count;
-        delete result.total_count;
-        delete result.callback_count;
-
-        result.is_pinned = Boolean(
-            result.is_pinned
-        );
-        result.created_at = new Date(
-            result.created_at
-        );
-        result.modified_at = result.modified_at ?
-            new Date(result.modified_at) : null;
-
-        return result;
-    })[0];
-}
-
-/**
- * @typedef {Object} AddCommentReaction
- * @property {number} comment_id 评论标识符
- * @property {number} operator_id 操作者识别码
- * @property {Date} operated_at 操作时间
- * @property {("like"|"unlike"|"mark"|
- *  "unmark"|"dislike"|"undislike")} name 反应名称
- * @property {number} folder_id 所属文件夹
- * @property {string} [comments] 备注
- * 
- * @typedef {Object} CRRFix
- * @property {number} reaction_id 反应标识符
- * 
- * @typedef {(AddCommentReaction & CRRFix)} CommentReactionRecord
- */
-
-/**
- * 对评论作出反应
- * 
- * @param {AddCommentReaction} reaction 评论标识符列表
- * @param {AddCommentReaction} defaults 操作者识别码
- * @param {typeof default_merger} merger 属性合并器
- * @returns {CommentReactionRecord} 反应记录
- */
-export function add_comment_reaction(
-    reaction, defaults = {}, merger = default_merger
-) {
-    if (!reaction) return null;
-
-    const records = [];
-
-    let { operated_at } = reaction;
-
-    operated_at ??= defaults.operated_at;
-
-    const modified = {
-        "operated_at": operated_at.toISOString()
-    };
-
-    records.push(merger(current, {
-        ...defaults, ...modified 
-    }));
-
-    const get_results = get_insert_results;
-
-    const results = get_results(
-        records, "comment_reactions"
-    );
-
-    return results.map((result) => {
-        result.reaction_id = result.id;
-
-        delete result.id;
-
-        result.operated_at = new Date(
-            result.operated_at
-        );
-
-        return result;
-    })[0];
-}
-
-/**
  * @typedef {Object} CreateGroup
  * @property {string} name 用户组名称
  * @property {string} code 用户组代号
@@ -763,9 +907,37 @@ export function add_comment_reaction(
  * 
  * @typedef {Object} GRFix
  * @property {number} group_id 用户组标识符
+ * @property {object} counters 用户组计数
+ * @property {number} counters.member 成员数量
  * 
  * @typedef {(CreateGroup & GRFix)} GroupRecord
  */
+
+/**
+ * 用户组记录转换
+ * 
+ * @param {object} record 需要转换的记录
+ * @returns {GroupRecord}
+ */
+function convert_user_group(record) {
+    record.group_id = record.id;
+
+    delete record.id;
+
+    record.counters = {
+        "member": record.member_count
+    };
+
+    delete record.member_count;
+
+    record.created_at = new Date(
+        record.created_at
+    );
+    record.modified_at = record.modified_at ?
+        new Date(record.modified_at) : null;
+
+    return record;
+}
 
 /**
  * 创建用户组
@@ -803,32 +975,16 @@ export function create_user_group(
         records, "user_groups"
     );
 
-    return results.map((result) => {
-        result.group_id = result.id;
+    const convert = convert_user_group;
 
-        delete result.id;
-
-        result.counters = {
-            "member": result.member_count
-        };
-
-        delete result.member_count;
-
-        result.created_at = new Date(
-            result.created_at
-        );
-        result.modified_at = result.modified_at ?
-            new Date(result.modified_at) : null;
-
-        return result;
-    })[0];
+    return results.map(convert)[0];
 }
 
 /**
  * 获取用户组信息
  * 
- * @param {number[]} group_id 需要获取的用户组标识符
- * @returns {GroupRecord[]} 用户组记录
+ * @param {number} group_id 需要获取的用户组标识符
+ * @returns {GroupRecord} 用户组记录
  */
 export function get_user_group(group_id) {
     const record = operator.record();
@@ -842,32 +998,18 @@ export function get_user_group(group_id) {
                     "type": "unit",
                     "column": "id",
                     "restrict": {
-                        "include": [ group_id ]
+                        "include": [
+                            group_id
+                        ]
                     }
                 }
             ]
         }
     ).flat(3);
 
-    return records.map((result) => {
-        result.group_id = result.id;
+    const convert = convert_user_group;
 
-        delete result.id;
-
-        result.counters = {
-            "member": result.member_count
-        };
-
-        delete result.member_count;
-
-        result.created_at = new Date(
-            result.created_at
-        );
-        result.modified_at = result.modified_at ?
-            new Date(result.modified_at) : null;
-
-        return result;
-    })[0];
+    return records.map(convert)[0];
 }
 
 /**
@@ -896,8 +1038,8 @@ export function get_user_group(group_id) {
  * 添加用户到用户组
  * 
  * @typedef {Object} AddU2GResults
- * @property {AddUserToGroupAuditLog} audits 操作日志
- * @property {MemberGroupRelationRecord} relations 成员关系记录
+ * @property {AddUserToGroupAuditLog} audit 操作日志
+ * @property {MemberGroupRelationRecord} relation 成员关系记录
  * 
  * @param {AddU2G} behavior 添加行为
  * @param {AddU2G} defaults 默认值集合
@@ -950,8 +1092,26 @@ export function add_user_to_group(
         })
     );
 
+    const group = get_user_group(current.group_id);
+
+    const where = {
+        "type": "group",
+        "relation": "and",
+        "children": [
+            {
+                "type": "unit",
+                "column": "id",
+                "restrict": {
+                    "include": [
+                        current.group_id
+                    ]
+                }
+            }
+        ]
+    };
+
     return {
-        "audits": result_lists.operate_audit_logs.map((record) => {
+        "audit": result_lists.operate_audit_logs.map((record) => {
             const infos = JSON.parse(record.extra_info);
 
             return {
@@ -967,7 +1127,17 @@ export function add_user_to_group(
             };
         })[0],
 
-        "relations": result_lists.group_users.map((record) => ( {
+        "group": {
+            "old": group,
+            "now": get_update_results(
+                where, "user_groups", {
+                    "member_count":
+                        group.counters.member + 1
+                }
+            ).map(convert_user_group)[0]
+        },
+
+        "relation": result_lists.group_users.map((record) => ( {
             "member_id": record.id,
             "user_id": record.user_id,
             "group_id": record.group_id,
@@ -986,6 +1156,25 @@ export function add_user_to_group(
  * @typedef {Omit<AddUserToGroupAuditLog,
  *  ("expired_at"|"status")>} RemoveUserFromGroupAuditLog
  */
+
+/**
+ * 转换数据库记录为用户组成员关系记录
+ * 
+ * @param {object} record 需要转换的记录
+ * @returns {MemberGroupRelationRecord} 转换结果
+ */
+function convert_group_user_record(record) {
+    return {
+        "member_id": record.id,
+        "user_id": record.user_id,
+        "group_id": record.group_id,
+        "status": record.status,
+        "expired_at": record.expired_at ?
+            new Date(record.expired_at) : null,
+        "operated_at": new Date(record.operated_at),
+        "operator_id": record.operator_id
+    };
+}
 
 /**
  * 添加用户到用户组
@@ -1009,29 +1198,70 @@ export function remove_user_from_group(
     };
 
     const current = merger(behavior, defaults);
-    const { comments, reason_id, ...create } = current;
-    const { operated_at } = create;
+    const { comments, reason_id, ...remove } = current;
+    const { operated_at } = remove;
 
     const modified = {
         "operated_at": operated_at.toISOString()
     };
 
     record_lists.update.push(
-        merger(create, modified)
+        merger(remove, modified)
     );
 
     record_lists.insert.push({
         "operate_type": "remove-user-form-group",
-        "target_id": create.user_id,
+        "target_id": remove.user_id,
         "target_type": "user",
-        "operator_id": create.operator_id,
+        "operator_id": remove.operator_id,
         "reason_id": reason_id,
         "comments": comments,
         "operated_at": modified.operated_at,
         "extra_info": JSON.stringify({
-            "target_group": create.group_id
+            "target_group": remove.group_id
         }),
     });
+
+    const convert = convert_group_user_record;
+
+    const target_record_select_where = {
+        "type": "group",
+        "relation": "and",
+        "children": [
+            {
+                "type": "unit",
+                "column": "user_id",
+                "restrict": {
+                    "include": [ remove.user_id ]
+                }
+            },
+            {
+                "type": "unit",
+                "column": "group_id",
+                "restrict": {
+                    "include": [ remove.group_id ]
+                }
+            }
+        ]
+    };
+
+    const group = get_user_group(current.group_id);
+
+    const where = {
+        "type": "group",
+        "relation": "and",
+        "children": [
+            {
+                "type": "unit",
+                "column": "id",
+                "restrict": {
+                    "include": [
+                        current.group_id
+                    ]
+                }
+            }
+        ]
+    };
 
     return {
         "audits": get_insert_results(
@@ -1050,16 +1280,19 @@ export function remove_user_from_group(
             };
         })[0],
 
-        "relations": result_lists.group_users.map((record) => ( {
-            "member_id": record.id,
-            "user_id": record.user_id,
-            "group_id": record.group_id,
-            "status": record.status,
-            "expired_at": record.expired_at ?
-                new Date(record.expired_at) : null,
-            "operated_at": new Date(record.operated_at),
-            "operator_id": record.operator_id
-        }))[0],
+        "group": {
+            "old": group,
+            "now": get_update_results(
+                where, "user_groups", {
+                    "member_count":
+                        group.counters.member - 1
+                }
+            ).map(convert_user_group)[0]
+        },
+
+        "relations": get_delete_results(
+            target_record_select_where, "group_users"
+        ).map((record) => convert(record))[0]
     };
 }
 
@@ -1087,7 +1320,9 @@ export function get_group_list_by_user_id(
                     "type": "unit",
                     "column": "user_id",
                     "restrict": {
-                        "include": [ user_id ]
+                        "include": [
+                            user_id
+                        ]
                     }
                 }
             ]
@@ -1109,4 +1344,337 @@ export function get_group_list_by_user_id(
         "operated_at": new Date(record.operated_at),
         "operator_id": record.operator_id
     }));
+}
+
+/**
+ * 根据用户标识符获取所属的用户组信息
+ * 
+ * @param {number} group_id 用户组标识符
+ * @param {number} count 每页用户数
+ * @param {number} index 当前页索引（从 1 开始）
+ * @returns {MemberGroupRelationRecord} 用户组信息
+ */
+export function get_group_user_list(
+    group_id, count = 50, index = 1
+) {
+    if (!group_id) return null;
+
+    const record = operator.record();
+
+    const records = record.select(
+        "group_users", {
+            "type": "group",
+            "relation": "and",
+            "children": [
+                {
+                    "type": "unit",
+                    "column": "group_id",
+                    "restrict": {
+                        "include": [
+                            group_id
+                        ]
+                    }
+                }
+            ]
+        }, {
+            "paginate": {
+                "limit": count,
+                "offset": (index - 1) * count
+            }
+        }
+    ).flat(3);
+
+    const convert = convert_group_user_record;
+
+    return records.map(record => convert(record));
+}
+
+/**
+ * 将游客令牌记录转换为 GuestTokenRecord 对象
+ * 
+ * @typedef {Object} GuestTokenRecord
+ * @property {number} token_id 令牌标识符
+ * @property {string} ip_address IP 地址
+ * @property {Date} created_at 令牌创建时间
+ * @property {Date} expired_at 令牌过期时间
+ * @property {string} jti 令牌标识符
+ * 
+ * @param {object} record 游客令牌记录
+ * @returns {GuestTokenRecord} 游客令牌
+ */
+function convert_guest_token_record(record) {
+    record.token_id = record.id;
+
+    delete record.id;
+
+    return restore_at_fields(record);
+}
+
+/**
+ * 生成游客令牌
+ * 
+ * @typedef {Object} GenerateGuestToken
+ * @property {string} [issuer] 令牌发行者
+ * @property {Date} created_at 令牌创建时间
+ * @property {Date} expired_at 令牌过期时间
+ * @property {string} ip_address 游客IP地址
+ * 
+ * @param {GenerateGuestToken} token 游客令牌
+ * @param {GenerateGuestToken} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {string} 游客令牌
+ */
+export function generate_guest_token(
+    token, defaults = {}, merger = default_merger
+) {
+    if (!token) return null;
+
+    const current = merger(
+        token, defaults
+    );
+
+    const payload = {
+        "iss": current.issuer || DefaultIssuer,
+        "iat": get_ts(current.created_at),
+        "exp": get_ts(current.expired_at),
+        "ip": current.ip_address,
+        "type": "guest"
+    };
+
+    payload.jti = gen_hmac_password(
+        JSON.stringify(payload), current.created_at
+    );
+
+    const { created_at, expired_at } = current;
+
+    const records = [{
+        "jti": payload.jti,
+        "ip_address": current.ip_address,
+        "created_at": created_at.toISOString(),
+        "expired_at": expired_at.toISOString()
+    }];
+
+    const results = get_insert_results(
+        records, "guest_tokens"
+    );
+
+    const options = { "algorithm": "HS256" };
+
+    const convert = convert_guest_token_record;
+
+    return {
+        "record": results.map(convert)[0],
+        "token": jwt.sign(
+            payload, JWT_Secret, options
+        )
+    };
+}
+
+/**
+ * 获取游客历史令牌记录（颁布时间倒序）
+ * 
+ * @param {string} ip_address 地址
+ * @param {number} count 每页数量 
+ * @param {number} index 页码（从 1 开始）
+ * @returns {GuestTokenRecord[]} 历史令牌记录
+ */
+export function get_guest_tokens(
+    ip_address, count = 50, index = 1
+) {
+    if (!ip_address) return null;
+
+    const record = operator.record();
+
+    const records = record.select(
+        "guest_tokens", {
+            "type": "unit",
+            "column": "ip_address",
+            "restrict": {
+                "include": [
+                    ip_address
+                ]
+            }
+        }, {
+            "paginate": {
+                "limit": count,
+                "offset": (index - 1) * count
+            },
+
+            "by": {
+                "order": [
+                    "-created_at"
+                ]
+            }
+        }
+    ).flat(3);
+
+    const convert = convert_guest_token_record;
+
+    return records.map(convert);
+}
+
+/**
+ * @typedef {Object} GGRVC
+ * @property {string} guest_token 游客令牌
+ * @property {Date} created_at 令牌创建时间
+ * @property {Date} expired_at 令牌过期时间
+ * 
+ * @typedef {Object} GGRVCRFix
+ * @property {number} answer 验证答案
+ * @property {string} jti 令牌标识符
+ * @property {number} code_id 验证码标识符
+ * @property {boolean} is_invalid 是否失效
+ * 
+ * @typedef {Omit<(GGRVCRFix & GGRVC), "guest_token">} GGRVCRecord
+ * 
+ * @typedef {Object} GURVCResults
+ * @property {Buffer} image 验证码图像
+ * @property {GGRVCRecord} record 验证码记录
+ */
+
+/**
+ * 转换验证码记录
+ * 
+ * @param {object} record 验证码记录
+ * @returns {GGRVCRecord} 转换后的记录
+ */
+function convert_grv(record) {
+    record.code_id = record.id;
+
+    delete record.id;
+
+    record.is_invalid = Boolean(record.is_invalid);
+
+    record.created_at = new Date(record.created_at);
+    record.expired_at = new Date(record.expired_at);
+
+    return record;
+}
+
+/**
+ * 检查 JWT 令牌并获取内容
+ * 
+ * @param {string} jwt_content JWT 令牌
+ * @returns {object} 令牌内容
+ */
+export function check_jwt_token(jwt_content) {
+    try {
+        return jwt.verify(
+            jwt_content, JWT_Secret
+        );
+    } catch (e) {
+        return "invalid";
+    }
+}
+
+/**
+ * 生成游客注册验证记录
+ * 
+ * @param {GGRVC} verify_code 验证码
+ * @param {GenerateGuestToken} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {GURVCResults} 验证码记录
+ */
+export function generate_guest_register_verify_code(
+    verify_code, defaults = {}, merger = default_merger
+) {
+    if (!verify_code) return null;
+
+    const current = merger(
+        verify_code, defaults
+    );
+
+    const { jti } = check_jwt_token(
+        current.guest_token
+    );
+
+    const answer = parseInt(
+        Math.random() * 1e6
+    );
+
+    const records = [{
+        "guest_token": jti,
+        "answer": answer,
+        "created_at": current.created_at.toISOString(),
+        "expired_at": current.expired_at.toISOString()
+    }];
+
+    const get_results = get_insert_results;
+
+    const results = get_results(
+        records, "register_verify_codes"
+    );
+
+    const convert = convert_grv;
+
+    return {
+        "record": results.map(convert)[0],
+        "image": generate_verify_code_image(answer)
+    };
+}
+
+/**
+ * 获取游客注册验证记录
+ * 
+ * @param {number} code_id 验证码标识符
+ * @returns {GGRVCRecord} 验证码记录
+ */
+export function get_guest_register_verify_code(code_id) {
+    if (!code_id) return null;
+
+    const record = operator.record();
+
+    const results = record.select(
+        "register_verify_codes", {
+            "type": "group",
+            "relation": "and",
+            "children": [
+                {
+                    "type": "unit",
+                    "column": "id",
+                    "restrict": {
+                        "include": [
+                            code_id
+                        ]
+                    }
+                }
+            ]
+        }
+    );
+
+    return results.map(convert_grv)[0];
+}
+
+/**
+ * 游客注册验证码失效
+ * 
+ * @param {number} code_id 验证码标识符
+ * @returns {GGRVCRecord} 验证码记录
+ */
+export function revoke_guest_register_verify_code(code_id) {
+    if (!code_id) return null;
+
+    const get_results = get_update_results;
+
+    const results = get_results(
+        {
+            "type": "group",
+            "relation": "and",
+            "children": [
+                {
+                    "type": "unit",
+                    "column": "id",
+                    "restrict": {
+                        "include": [
+                            code_id
+                        ]
+                    }
+                }
+            ]
+        }, "register_verify_codes", {
+            "is_invalid": 1
+        }
+    );
+
+    return results.map(convert_grv)[0];
 }

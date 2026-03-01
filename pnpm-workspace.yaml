@@ -1,3 +1,4 @@
 onlyBuiltDependencies:
   - bcrypt
   - better-sqlite3
+  - node-canvas

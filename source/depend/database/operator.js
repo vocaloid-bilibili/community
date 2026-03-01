@@ -253,17 +253,18 @@ export class DatabaseOperator {
      * 
      * @param {string} table 表单名称
      * @param {object} where 删除条目的条件
+     * @param {object} options 构建语句时使用的配置
      * @param {Function} reviewer 语句生成结果审查函数
      * @returns 执行结果
      */
-    delete_record(table, where, reviewer) {
+    delete_record(table, where, options, reviewer) {
         where ??= {};
 
         const { record } = this.generator;
 
         const handler = record.delete;
 
-        const args = [ table, where ];
+        const args = [ table, where, options ];
 
         return this.#process(
             handler, args, reviewer
