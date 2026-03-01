@@ -104,8 +104,7 @@
                             "name": "jti",
                             "type": "text",
                             "flags": [
-                                "not-null",
-                                "unique"
+                                "not-null"
                             ]
                         },
                         {

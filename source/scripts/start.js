@@ -38,10 +38,13 @@ app.get("/random/guest-verify-code-image", (_, response) => {
     ));
 });
 
+const DURATIONS = {
+    "guest_token": 5 * 60 * 1000,
+    "guest_verify_code": 5 * 60 * 1000
+};
+
 app.get("/guest/token", (request, response) => {
     const now_ts = Date.now();
-
-    const duration = 5 * 60 * 1000;
 
     const method = [];
 
@@ -66,6 +69,8 @@ app.get("/guest/token", (request, response) => {
 
     method[1] = "generate_guest_token";
 
+    const duration = DURATIONS["guest_token"];
+
     const results = community[method[1]]({
         "ip_address": ip_address,
         "created_at": new Date(now_ts),
@@ -83,6 +88,62 @@ app.get("/guest/token", (request, response) => {
         ),
         "status": "success"
     });
+});
+
+app.use((request, response, next) => {
+    const now_ts = Date.now();
+
+    const jwt_token = request.
+        headers.authorization?.
+        replace("Bearer ", "");
+
+    if (!jwt_token) {
+        return response.send({
+            "status": "failure",
+            "code": "no_auth_header",
+            "msg": "请提供 Auth 标头"
+        });
+    }
+
+    const methods = [];
+
+    methods[0] = "check_jwt_token";
+
+    const token = community
+        [methods[0]](jwt_token);
+
+    if (token === "invalid") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token",
+            "msg": "无效的令牌"
+        });
+    }
+
+    if (token.type === "guest") {
+        const ip_address = request.
+            socket.remoteAddress;
+
+        if (ip_address !== token.ip) {
+            return response.send({
+                "status": "failure",
+                "code": "ip_address_mismatch",
+                "msg": "令牌签发地址与当前地址不匹配"
+            });
+        }
+    }
+
+    if (token.exp < now_ts / 1000) {
+        return response.send({
+            "status": "failure",
+            "code": "token_expired",
+            "msg": "令牌已过期"
+        });
+    }
+
+    request.token = token;
+
+    next();
 });
 
 /**
@@ -110,49 +171,13 @@ const regexs = {
 app.get("/register/user", (request, response) => {
     const now_ts = Date.now();
 
-    const jwt_token = request.
-        headers.authorization?.
-        replace("Bearer ", "");
-
-    if (!jwt_token) {
-        return response.send({
-            "status": "failure",
-            "code": "no_auth_header",
-            "msg": "请提供 Auth 标头"
-        });
-    }
-
-    const methods = []
-
-    methods[0] = "check_jwt_token";
-
-    const token = community
-        [methods[0]](jwt_token);
-
-    if (token === "invalid") {
-        return response.send({
-            "status": "failure",
-            "code": "invalid_token",
-            "msg": "无效的令牌"
-        });
-    }
+    const { token } = request;
 
     if (token.type !== "guest") {
         return response.send({
             "status": "failure",
             "code": "invalid_token_type",
             "msg": "无效的令牌类型"
-        });
-    }
-
-    const ip_address = request.
-        socket.remoteAddress;
-
-    if (ip_address !== token.ip) {
-        return response.send({
-            "status": "failure",
-            "code": "ip_address_mismatch",
-            "msg": "令牌签发地址与当前地址不匹配"
         });
     }
 
@@ -190,9 +215,9 @@ app.get("/register/user", (request, response) => {
         "msg": "无效的验证码答案"
     });
 
-    
-    methods[0] =
-        "get_guest_register_verify_code";
+    const methods = [
+        "get_guest_register_verify_code"
+    ];
 
     const code = community[methods[0]](
         parseInt(params.code_id)
@@ -367,46 +392,27 @@ app.get("/register/user", (request, response) => {
 app.get("/guest/verify-code", (request, response) => {
     const now_ts = Date.now();
 
-    const duration = 5 * 60 * 1000;
+    const duration = DURATIONS["guest_verify_code"];
 
-    const method = [];
+    const method = [
+        "generate_guest_register_verify_code"
+    ];
 
-    const ip_address = request.
-        socket.remoteAddress;
-
-    method[0] = "get_guest_tokens";
-
-    const history = community[method[0]](
-        request.socket.remoteAddress, 1, 1
-    );
-
-    history[0] ??= { "expired_at": new Date(0) };
-
-    if (history[0].expired_at > now_ts) {
-        return response.send({
-            "status": "failure",
-            "code": "token_not_expired",
-            "message": "最新访客令牌尚未过期"
-        });
-    }
-
-    method[1] = "generate_guest_token";
-
-    const results = community[method[1]]({
-        "ip_address": ip_address,
+    const results = community[method[0]]({
+        "jti": request.token.jti,
         "created_at": new Date(now_ts),
         "expired_at": new Date(
             now_ts + duration
-        ),
+        )
     });
 
+    const text = results.image.toString("base64");
+
     return response.send({
-        "token": results.token,
-        "time": new Date(now_ts),
-        "ip_address": ip_address,
-        "expired_at": new Date(
-            now_ts + duration
-        ),
+        "data": {
+            "image": "data:image/png;base64," + text,
+            "code_id": results.record.code_id
+        },
         "status": "success"
     });
 });

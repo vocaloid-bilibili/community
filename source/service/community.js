@@ -1515,7 +1515,7 @@ export function get_guest_tokens(
 
 /**
  * @typedef {Object} GGRVC
- * @property {string} guest_token 游客令牌
+ * @property {string} jti 游客令牌标识符
  * @property {Date} created_at 令牌创建时间
  * @property {Date} expired_at 令牌过期时间
  * 
@@ -1560,7 +1560,9 @@ function convert_grv(record) {
 export function check_jwt_token(jwt_content) {
     try {
         return jwt.verify(
-            jwt_content, JWT_Secret
+            jwt_content, JWT_Secret, {
+                "ignoreExpiration": true,
+            }
         );
     } catch (e) {
         return "invalid";
@@ -1584,19 +1586,17 @@ export function generate_guest_register_verify_code(
         verify_code, defaults
     );
 
-    const { jti } = check_jwt_token(
-        current.guest_token
-    );
-
     const answer = parseInt(
         Math.random() * 1e6
     );
 
+    const { expired_at, created_at } = current;
+
     const records = [{
-        "guest_token": jti,
         "answer": answer,
-        "created_at": current.created_at.toISOString(),
-        "expired_at": current.expired_at.toISOString()
+        "jti": current.jti,
+        "created_at": created_at.toISOString(),
+        "expired_at": expired_at.toISOString()
     }];
 
     const get_results = get_insert_results;
