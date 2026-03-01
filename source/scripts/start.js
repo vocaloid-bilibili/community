@@ -38,7 +38,7 @@ app.get("/random/guest-verify-code-image", (_, response) => {
     ));
 });
 
-const DURATIONS = {
+const durations = {
     "guest_token": 5 * 60 * 1000,
     "guest_verify_code": 5 * 60 * 1000
 };
@@ -69,7 +69,7 @@ app.get("/guest/token", (request, response) => {
 
     method[1] = "generate_guest_token";
 
-    const duration = DURATIONS["guest_token"];
+    const duration = durations["guest_token"];
 
     const results = community[method[1]]({
         "ip_address": ip_address,
@@ -168,7 +168,7 @@ const regexs = {
     }
 };
 
-app.get("/register/user", (request, response) => {
+app.post("/register/user", (request, response) => {
     const now_ts = Date.now();
 
     const { token } = request;
@@ -385,14 +385,15 @@ app.get("/register/user", (request, response) => {
         "data": {
             "user_id": result.user_id,
             "created_at": new Date(now_ts)
-        }
+        },
+        "msg": "账户注册成功"
     });
 });
 
 app.get("/guest/verify-code", (request, response) => {
     const now_ts = Date.now();
 
-    const duration = DURATIONS["guest_verify_code"];
+    const duration = durations["guest_verify_code"];
 
     const method = [
         "generate_guest_register_verify_code"
@@ -414,5 +415,112 @@ app.get("/guest/verify-code", (request, response) => {
             "code_id": results.record.code_id
         },
         "status": "success"
+    });
+});
+
+app.get("/user/token/access", (request, response) => {
+    const now_ts = Date.now();
+
+
+});
+
+app.get("/user/token/refresh", (request, response) => {
+    const now_ts = Date.now();
+
+
+});
+
+app.delete("/user/token/refresh", (request, response) => {
+    const now_ts = Date.now();
+
+    const { token } = request;
+
+    if (token.type !== "user") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token_type",
+            "msg": "无效的令牌类型"
+        });
+    }
+
+    const { aud } = token;
+
+    const admin = aud.findLast(
+        ({ code }) => code === "admin"
+    );
+
+    if (admin === undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "permission_denied",
+            "msg": "权限不足"
+        });
+    }
+
+    if (admin.exp < now_ts / 1000) {
+        return response.send({
+            "status": "failure",
+            "code": "admin_expired",
+            "msg": "管理员身份已过期"
+        });
+    }
+
+    const { query } = request;
+
+    if (!query.reason_id) {
+        return response.send({
+            "status": "failure",
+            "code": "no_reason_id",
+            "msg": "请提供原因数字标识符"
+        });
+    }
+
+    if (is_positive_integer_like(
+        query.reason_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_reason_id",
+        "msg": "无效的原因数字标识符"
+    });
+
+    if (!query.token_id) {
+        return response.send({
+            "status": "failure",
+            "code": "no_token_id",
+            "msg": "请提供刷新令牌标识符"
+        });
+    }
+
+    if (is_positive_integer_like(
+        query.token_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_token_id",
+        "msg": "无效的刷新令牌标识符"
+    });
+
+    const { sub } = token;
+    const user_id = +sub.slice(
+        sub.indexOf("_") + 5
+    );
+
+    const methods = [
+        "revoke_refresh_token"
+    ];
+
+    const result = community.revoke_refresh_token({
+        "reason_id": +query.reason_id,
+        "revoked_at": new Date(now_ts),
+        "revoker_id": user_id,
+        "token_id": +query.token_id
+    });
+
+    return response.send({
+        "status": "success",
+        "data": {
+            "log_id": result.audit.log_id,
+            "revoked_at": result.audit.revoked_at
+        },
+        "msg": "刷新令牌吊销成功"
     });
 });

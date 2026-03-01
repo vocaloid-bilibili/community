@@ -280,8 +280,16 @@
                             ]
                         },
                         {
+                            "name": "status",
+                            "type": "text",
+                            "default": "created"
+                        },
+                        {
                             "name": "expired_at",
-                            "type": "text"
+                            "type": "text",
+                            "flags": [
+                                "not-null"
+                            ]
                         },
                         {
                             "name": "created_at",

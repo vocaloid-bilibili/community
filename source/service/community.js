@@ -604,6 +604,20 @@ export function update_user_infocard(
  */
 
 /**
+ * 将刷新令牌记录转换为 RefreshTokenRecord 对象
+ * 
+ * @param {object} record 刷新令牌记录
+ * @returns {RefreshTokenRecord} 刷新令牌
+ */
+function convert_refresh_token(record) {
+    record.token_id = record.id;
+
+    delete record.id;
+
+    return restore_at_fields(record);
+}
+
+/**
  * 为用户生成刷新令牌
  * 
  * @param {CreateRefreshToken} token 令牌列表
@@ -643,20 +657,9 @@ export function create_refresh_token(
         records, "refresh_tokens"
     );
 
-    return results.map((result) => {
-        result.token_id = result.id;
+    const convert = convert_refresh_token;
 
-        delete result.id;
-
-        result.created_at = new Date(
-            result.created_at
-        );
-        result.expired_at = new Date(
-            result.expired_at
-        );
-
-        return result;
-    })[0];
+    return results.map(convert)[0];
 }
 
 /**
@@ -738,19 +741,23 @@ export function generate_access_token(
  * @property {number} reason_id 吊销原因数字代号
  * @property {string} [comments] 操作注解文本
  * 
- * @typedef {Object} RTRFix
+ * @typedef {Object} RTRFix_2
  * @property {number} log_id 审计日志标识符
  * 
- * @typedef {(RevokeToken & RTRFix)} RevokeTokenRecord
+ * @typedef {(RevokeToken & RTRFix_2)} RevokeTokenRecord
  */
 
 /**
  * 吊销刷新令牌
  * 
+ * @typedef {Object} RRTResults
+ * @property {RevokeTokenRecord} audit 吊销记录
+ * @property {RefreshTokenRecord} record 更新后的记录
+ * 
  * @param {RevokeToken} token 吊销列表
  * @param {RevokeToken} defaults 默认值集合
  * @param {typeof default_merger} merger 属性合并器
- * @returns {RevokeTokenRecord} 吊销记录
+ * @returns {RRTResults} 吊销记录
  */
 export function revoke_refresh_token(
     token, defaults = {}, merger = default_merger
@@ -779,16 +786,26 @@ export function revoke_refresh_token(
         records, "operate_audit_logs"
     );
 
-    return results.map((result) => ({
-        "log_id": result.id,
-        "token_id": result.target_id,
-        "revoked_at": new Date(
-            result.operated_at
-        ),
-        "revoker_id": result.operator_id,
-        "reason_id": result.reason_id,
-        "comments": result.comments
-    }))[0];
+    const convert = convert_refresh_token;
+
+    return {
+        "audit": results.map((result) => ({
+            "log_id": result.id,
+            "token_id": result.target_id,
+            "revoked_at": new Date(
+                result.operated_at
+            ),
+            "revoker_id": result.operator_id,
+            "reason_id": result.reason_id,
+            "comments": result.comments
+        }))[0],
+
+        "token": get_update_results(
+            where, "refresh_tokens", {
+                "status": "revoked",
+            }
+        ).map(convert)[0]
+    }
 }
 
 /**
@@ -1163,7 +1180,7 @@ export function add_user_to_group(
  * @param {object} record 需要转换的记录
  * @returns {MemberGroupRelationRecord} 转换结果
  */
-function convert_group_user_record(record) {
+function convert_group_user(record) {
     return {
         "member_id": record.id,
         "user_id": record.user_id,
@@ -1222,7 +1239,7 @@ export function remove_user_from_group(
         }),
     });
 
-    const convert = convert_group_user_record;
+    const convert = convert_group_user;
 
     const target_record_select_where = {
         "type": "group",
@@ -1384,7 +1401,7 @@ export function get_group_user_list(
         }
     ).flat(3);
 
-    const convert = convert_group_user_record;
+    const convert = convert_group_user;
 
     return records.map(record => convert(record));
 }
@@ -1402,7 +1419,7 @@ export function get_group_user_list(
  * @param {object} record 游客令牌记录
  * @returns {GuestTokenRecord} 游客令牌
  */
-function convert_guest_token_record(record) {
+function convert_guest_token(record) {
     record.token_id = record.id;
 
     delete record.id;
@@ -1460,7 +1477,7 @@ export function generate_guest_token(
 
     const options = { "algorithm": "HS256" };
 
-    const convert = convert_guest_token_record;
+    const convert = convert_guest_token;
 
     return {
         "record": results.map(convert)[0],
@@ -1508,7 +1525,7 @@ export function get_guest_tokens(
         }
     ).flat(3);
 
-    const convert = convert_guest_token_record;
+    const convert = convert_guest_token;
 
     return records.map(convert);
 }

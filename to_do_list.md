@@ -8,7 +8,6 @@
 - get_delete_results $\checkmark$
 - get_hmac_password $\checkmark$
 
-
 ## 社区系统后端接口
 
 ### 用户子模块
