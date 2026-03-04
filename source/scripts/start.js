@@ -40,10 +40,12 @@ app.get("/random/guest-verify-code-image", (_, response) => {
 
 const durations = {
     "guest_token": 5 * 60 * 1000,
-    "guest_verify_code": 5 * 60 * 1000
+    "access_token": 60 * 1000,
+    "guest_verify_code": 5 * 60 * 1000,
+    "user_login_verify_code": 5 * 60 * 1000
 };
 
-app.get("/guest/token", (request, response) => {
+app.get("/guests/token", (request, response) => {
     const now_ts = Date.now();
 
     const method = [];
@@ -86,6 +88,94 @@ app.get("/guest/token", (request, response) => {
         "expired_at": new Date(
             now_ts + duration
         ),
+        "status": "success"
+    });
+});
+
+const regexs = {
+    "test": {
+        "username": /^[a-zA-Z0-9\-_]$/,
+        "nickname": /\p{Cf}/u,
+        "email": /^[\w-]+(\.[\w-]+)*@[\w-]+(\.[\w-]+)+$/,
+        "refresh_token": /^[A-Za-z0-9+/]{44}$/
+    }
+};
+
+app.post("/auth/access", (request, response) => {
+    const now_ts = Date.now();
+    const duration = durations["access_token"];
+
+    const params = request.body;
+
+    if (!params.refresh_token.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_refresh_token",
+            "msg": "请提供刷新令牌"
+        });
+    }
+
+    const content = params.refresh_token;
+
+    const regex = regexs.test.refresh_token;
+
+    if (!regex.test(content)) {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_refresh_token",
+            "msg": "无效的刷新令牌"
+        });
+    }
+
+    const methods = [
+        "get_refresh_token"
+    ];
+
+    const token = community[methods[0]]({
+        "field": "content", "value": content
+    });
+
+    if (token === undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "refresh_token_not_exist",
+            "msg": "不存在的刷新令牌"
+        });
+    }
+
+    if (token.status === "revoked") {
+        return response.send({
+            "status": "failure",
+            "code": "refresh_token_revoked",
+            "msg": "刷新令牌已被吊销"
+        });
+    }
+
+    if (token.expired_at < now_ts) {
+        return response.send({
+            "status": "failure",
+            "code": "refresh_token_expired",
+            "msg": "刷新令牌已过期"
+        });
+    }
+
+    methods[0] = "generate_access_token";
+
+    const result = community[methods[0]]({
+        "created_at": new Date(now_ts),
+        "expired_at": new Date(
+            now_ts + duration
+        ),
+        "user_id": get_user_id(token.sub)
+    });
+
+    return response.send({
+        "data": {
+            "token": result,
+            "expired_at": new Date(
+                now_ts + duration
+            ),
+        },
         "status": "success"
     });
 });
@@ -160,14 +250,6 @@ function is_positive_integer_like(text) {
     return /^[1-9]\d*$/.test(text);
 }
 
-const regexs = {
-    "test": {
-        "username": /^[a-zA-Z0-9\-_]$/,
-        "nickname": /\p{Cf}/u,
-        "email": /^[\w-]+(\.[\w-]+)*@[\w-]+(\.[\w-]+)+$/
-    }
-};
-
 app.post("/register/user", (request, response) => {
     const now_ts = Date.now();
 
@@ -181,7 +263,7 @@ app.post("/register/user", (request, response) => {
         });
     }
 
-    const params = request.query;
+    const params = request.body;
 
     if (!params.code_id) {
         return response.send({
@@ -390,10 +472,10 @@ app.post("/register/user", (request, response) => {
     });
 });
 
-app.get("/guest/verify-code", (request, response) => {
+app.get("/guests/verify-code", (request, response) => {
     const now_ts = Date.now();
 
-    const duration = durations["guest_verify_code"];
+    const duration = durations["user_login_verify_code"];
 
     const method = [
         "generate_guest_register_verify_code"
@@ -418,15 +500,30 @@ app.get("/guest/verify-code", (request, response) => {
     });
 });
 
-app.get("/user/token/access", (request, response) => {
+app.get("/login/verify-code", (request, response) => {
     const now_ts = Date.now();
 
-});
+    const duration = durations["user_login_verify_code"];
 
-app.get("/user/token/refresh", (request, response) => {
-    const now_ts = Date.now();
+    const method = [ "generate_login_verify_code" ];
 
+    const results = community[method[0]]({
+        "jti": request.token.jti,
+        "created_at": new Date(now_ts),
+        "expired_at": new Date(
+            now_ts + duration
+        )
+    });
 
+    const text = results.image.toString("base64");
+
+    return response.send({
+        "data": {
+            "image": "data:image/png;base64," + text,
+            "code_id": results.record.code_id
+        },
+        "status": "success"
+    });
 });
 
 /**
@@ -478,7 +575,7 @@ function get_user_id(sub) {
     );
 }
 
-app.delete("/user/token/refresh", (request, response) => {
+app.delete("/users/token/refresh", (request, response) => {
     const now_ts = Date.now();
 
     const { token } = request;
@@ -557,7 +654,7 @@ app.delete("/user/token/refresh", (request, response) => {
     });
 });
 
-app.patch("/user/:user_id/:field_name", (request, response, next) => {
+app.patch("/users/:user_id/:field_name", (request, response, next) => {
     const now_ts = Date.now();
 
     if (!request.params.user_id.trim()) {
@@ -639,7 +736,7 @@ app.patch("/user/:user_id/:field_name", (request, response, next) => {
     });
 });
 
-app.get("/user/:user_id", (request, response) => {
+app.get("/users/:user_id", (request, response) => {
     const { token } = request;
 
     if (token.type !== "user") {
@@ -693,7 +790,17 @@ app.get("/user/:user_id", (request, response) => {
                 "code": "user_banned",
                 "msg": "目标账户已被封禁"
             });
-        } else return response.send({
+        }
+
+        if (results.status === "activating") {
+            return response.send({
+                "status": "failure",
+                "code": "user_activating",
+                "msg": "目标账户尚未激活"
+            });
+        }
+
+        return response.send({
             "status": "failure",
             "code": "user_status_exception",
             "msg": "目标账户状态异常"
@@ -751,5 +858,361 @@ app.get("/user/:user_id", (request, response) => {
         }, shows.includes("email") ? {
             "email": results.email
         } : {}),
+    });
+});
+
+app.post("/groups/:group_id/members", (request, response) => {
+    const now_ts = Date.now();
+
+    const { token } = request;
+
+    if (token.type !== "system") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token_type",
+            "msg": "无效的令牌类型"
+        });
+    }
+
+    if (!request.params.group_id.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_group_id",
+            "msg": "请提供用户组标识符"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        request.params.group_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_group_id",
+        "msg": "无效的用户组标识符"
+    });
+
+    const methods = [
+        "get_user_group"
+    ];
+
+    const group = community[methods[0]](
+        parseInt(request.params.group_id)
+    );
+
+    if (group === undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "user_not_exist",
+            "msg": "目标用户组不存在"
+        });
+    }
+
+    const { query } = request;
+
+    if (!query.user_id.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_user_id",
+            "msg": "请提供用户标识符"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        query.user_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_user_id",
+        "msg": "无效的用户标识符"
+    });
+
+    if (!query.expired_ts.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_expired_ts",
+            "msg": "请提供过期时间"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        query.expired_ts
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_expired_ts",
+        "msg": "无效的过期时间"
+    });
+
+    methods[0] = [
+        "add_user_to_group"
+    ];
+
+    const result = community[methods[0]]({
+        "group_id": +request.params.group_id,
+        "user_id": +query.user_id,
+        "operated_at": new Date(now_ts),
+        "operator_id": get_user_id(token.sub),
+        "reason_id": 1,
+        "expired_at": new Date(
+            +query.expired_ts
+        )
+    });
+
+    const data = result.group.new;
+    
+    return response.send({
+        "status": "success",
+        "data": {
+            "operated_at": new Date(now_ts),
+            "member_count": data.counters.member,
+            "member_id": result.relation.member_id
+        }
+    });
+});
+
+app.delete("/groups/:group_id/members", (request, response) => {
+    const now_ts = Date.now();
+
+    const { token } = request;
+
+    if (token.type !== "system") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token_type",
+            "msg": "无效的令牌类型"
+        });
+    }
+
+    if (!request.params.group_id.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_group_id",
+            "msg": "请提供用户组标识符"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        request.params.group_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_group_id",
+        "msg": "无效的用户组标识符"
+    });
+
+    const methods = [
+        "get_user_group"
+    ];
+
+    const group = community[methods[0]](
+        parseInt(request.params.group_id)
+    );
+
+    if (group === undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "user_not_exist",
+            "msg": "目标用户组不存在"
+        });
+    }
+
+    const { query } = request;
+
+    if (!query.user_id.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_user_id",
+            "msg": "请提供用户标识符"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        query.user_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_user_id",
+        "msg": "无效的用户标识符"
+    });
+
+    methods[0] = [
+        "get_group_member"
+    ];
+
+    const { params } = request;
+
+    const record = community[methods[0]]({
+        "user_id": +query.user_id,
+        "group_id": +params.group_id,
+    });
+
+    if (record === undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "member_not_exist",
+            "msg": "用户组中不存在该成员"
+        });
+    }
+
+    methods[0] = [
+        "remove_user_from_group"
+    ];
+
+    const result = community[methods[0]]({
+        "group_id": +params.group_id,
+        "user_id": +query.user_id,
+        "operated_at": new Date(now_ts),
+        "operator_id": get_user_id(token.sub),
+        "reason_id": 1
+    });
+
+    const data = result.group.new;
+    
+    return response.send({
+        "status": "success",
+        "data": {
+            "operated_at": new Date(now_ts),
+            "member_count": data.counters.member,
+            "member_id": result.relation.member_id
+        }
+    });
+});
+
+app.get("/groups/:group_id/members", (request, response) => {
+    const { token } = request;
+
+    if (token.type !== "system") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token_type",
+            "msg": "无效的令牌类型"
+        });
+    }
+
+    if (!request.params.group_id.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_group_id",
+            "msg": "请提供用户组标识符"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        request.params.group_id
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_group_id",
+        "msg": "无效的用户组标识符"
+    });
+
+    const methods = [
+        "get_user_group"
+    ];
+
+    const group = community[methods[0]](
+        parseInt(request.params.group_id)
+    );
+
+    if (group === undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "user_not_exist",
+            "msg": "目标用户组不存在"
+        });
+    }
+
+    const { query } = request;
+
+    if (!query.count.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_page_count",
+            "msg": "请提供每页项目数"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        query.count
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_page_count",
+        "msg": "无效的每页项目数"
+    });
+
+    if (!query.index.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "no_page_index",
+            "msg": "请提供页数"
+        });
+    }
+
+    if (!is_positive_integer_like(
+        query.index
+    )) return response.send({
+        "status": "failure",
+        "code": "invalid_page_index",
+        "msg": "无效的页数"
+    });
+
+    if (+query.count > 50) {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_page_count",
+            "msg": "无效的每页项目数"
+        });
+    }
+
+    const { params } = request;
+
+    methods[0] = [
+        "get_group_user_list"
+    ];
+
+    const { count, index } = query;
+
+    const { member: total }= group.counters;
+
+    if (count * (index - 1) >= total) {
+        return response.send({
+            "status": "failure",
+            "code": "page_out_of_range",
+            "msg": "页码超出范围"
+        });
+    }
+
+    const records = community.get_group_user_list(
+        +params.group_id, +count, +index
+    );
+
+    const user_ids = records.map(
+        (record) => record.user_id
+    );
+
+    const users = community.get_users(user_ids);
+
+    const mapping = {
+        "users": new Map(
+            users.map((user) => [
+                user.id, user
+            ])
+        )
+    };
+
+    /** @type {(record: community.UserRecord)} */
+    const convert = (record) => ({
+        "nickname": record.nickname,
+        "username": record.username
+    });
+    
+    return response.send({
+        "status": "success",
+        "data": {
+            "list": records.map((record) => ({
+                "member_id": record.member_id,
+                "adder_id": record.operator_id,
+                "added_at": record.operated_at,
+                "expired_at": record.expired_at,
+                "user_id": record.user_id,
+                ...convert(mapping.users
+                    .get(record.user_id))
+            })),
+            "total": group.counters.member
+        }
     });
 });

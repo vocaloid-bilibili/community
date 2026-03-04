@@ -289,14 +289,73 @@ export function register_user(
 
     const modify = convert_at_fields;
 
-    records.push(modify(
-        merger(user, target)
+    const mapping = {
+        "$user_id": "id"
+    };
+
+    records.push(Object.fromEntries(
+        Object.entries(modify(
+            merger(user, target)
+        )).map(([field, value]) => {
+            if (field.startsWith("$")) {
+                field = mapping[field];
+            }
+
+            return [ field, value ];
+        })
     ));
 
     const get_results = get_insert_results;
 
     const results = get_results(
         records, "users"
+    );
+
+    const convert = convert_user_record;
+
+    return results.map(convert)[0];
+}
+
+/**
+ * 更新最后登录时间
+ * 
+ * @typedef {Object} UULLA
+ * @property {number} user_id 用户数字标识符
+ * @property {Date} last_login_at 最后登录时间
+ * 
+ * @param {UULLA} update 用户数字标识符
+ * @param {UULLA} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {UserRecord} 用户记录
+ */
+export function update_user_last_login_at(
+    update, defaults = {}, merger = default_merger
+) {
+    if (!update) return null;
+
+    const current = merger(
+        update, defaults
+    );
+
+    const get_results = get_update_results;
+
+    const { last_login_at } = current;
+
+    const select_user_where = {
+        "type": "unit",
+        "column": "id",
+        "restrict": {
+            "include": [
+                current.user_id
+            ]
+        }
+    };
+
+    const results = get_results(
+        select_user_where, "users", {
+            "last_login_at": last_login_at
+                .toISOString()
+        }
     );
 
     const convert = convert_user_record;
@@ -329,25 +388,21 @@ export function get_user_list_by_fields(
         where.values = [ where.values ];
     }
 
-    const results = record.select(
-        "users", {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": where.field,
-                    "restrict": {
-                        "include": where.values
-                    }
-                }
-            ]
-        }, {
-            "paginate": {
-                "limit": count,
-                "offset": (index - 1) * count
-            }
+    const paginate = {
+        "limit": count,
+        "offset": (index - 1) * count
+    };
+
+    const where = {
+        "type": "unit",
+        "column": where.field,
+        "restrict": {
+            "include": where.values
         }
+    };
+
+    const results = record.select(
+        "users", where, { paginate }
     ).flat(3);
 
     const convert = convert_user_record;
@@ -366,27 +421,51 @@ export function get_user(user_id) {
 
     const record = operator.record();
 
-    const results = record.select(
-        "users", {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": "id",
-                    "restrict": {
-                        "include": [
-                            user_id
-                        ]
-                    }
-                }
+    const record_where = {
+        "type": "unit",
+        "column": "id",
+        "restrict": {
+            "include": [
+                user_id
             ]
         }
+    };
+
+    const results = record.select(
+        "users", record_where
     ).flat(3);
 
     const convert = convert_user_record;
 
     return results.map(convert)[0];
+}
+
+/**
+ * 批量获取用户
+ * 
+ * @param {number} user_ids 用户标识符
+ * @returns {UserRecord[]} 用户记录
+ */
+export function get_users(user_ids = []) {
+    if (!user_ids) return null;
+
+    const record = operator.record();
+
+    const record_where = {
+        "type": "unit",
+        "column": "id",
+        "restrict": {
+            "include": user_ids
+        }
+    };
+
+    const results = record.select(
+        "users", record_where
+    ).flat(3);
+
+    const convert = convert_user_record;
+
+    return results.map(convert);
 }
 
 /**
@@ -528,28 +607,27 @@ export function update_user_infocard(
 
     const record = operator.record();
 
+    const { field_name } = current;
+
     const new_datas = {
-        [current.field_name]: current.new_value
+        [ field_name ]:
+            current.new_value
     };
 
     const result_lists = {};
 
-    result_lists.update = record.update(
-        "users", {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": "id",
-                    "restrict": {
-                        "include": [
-                            user_id
-                        ]
-                    }
-                }
+    const where = {
+        "type": "unit",
+        "column": "id",
+        "restrict": {
+            "include": [
+                user_id
             ]
-        }, new_datas, {
+        }
+    };
+
+    result_lists.update = record.update(
+        "users", where, new_datas, {
             "action": "execute",
             "return_field": "all",
         }
@@ -558,8 +636,6 @@ export function update_user_infocard(
     const convert = convert_user_record;
 
     const modified = convert_at_fields(current);
-
-    const { field_name } = modified;
 
     const records = [{
         "user_id": modified.user_id,
@@ -809,41 +885,49 @@ export function revoke_refresh_token(
 }
 
 /**
- * 通过刷新令牌标识符获取刷新令牌记录
+ * * @template {keyof RefreshTokenRecord} T
  * 
- * @param {number} token_id 刷新令牌标识符列表
- * @returns {RefreshTokenRecord} 带有历史信息的刷新令牌
+ * @typedef {Object} GetRefreshToken
+ * @property {Extract<T, string>} field 字段名称
+ * @property {RefreshTokenRecord[T]} value 字段值
  */
-export function get_refresh_token(token_id) {
-    if (token_id === undefined) return null;
+
+/**
+ * 通过刷新令牌信息获取刷新令牌记录
+ * 
+ * @typedef {keyof RefreshTokenRecord} K
+ * 
+ * @param {GetRefreshToken<K>} token 刷新令牌信息
+ * @param {GetRefreshToken<K>} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {RefreshTokenRecord} 刷新令牌记录
+ */
+export function get_refresh_token(
+    token, defaults = {}, merger = default_merger
+) {
+    if (!token) return null;
+
+    const current = merger(
+        token, defaults
+    );
 
     const record = operator.record();
 
     const records = record.select(
         "refresh_tokens", {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": "id",
-                    "restrict": {
-                        "include": [
-                            token_id
-                        ]
-                    }
-                }
-            ]
+            "type": "unit",
+            "column": current.field,
+            "restrict": {
+                "include": [
+                    current.value
+                ]
+            }
         }
     ).flat(3);
 
-    return records.map((record) => ({
-        "token_id": record.id,
-        "user_id": record.user_id,
-        "content": record.content,
-        "created_at": new Date(record.created_at),
-        "expired_at": new Date(record.expired_at)
-    }))[0];
+    const convert = convert_refresh_token;
+
+    return records.map(convert)[0];
 }
 
 /**
@@ -866,9 +950,9 @@ export function get_refresh_token(token_id) {
  * @param {number} token_id 刷新令牌标识符列表
  * @param {number} count 每页历史记录数
  * @param {number} index 当前页索引（从 1 开始）
- * @returns {RefreshTokenHistoryList} 带有历史信息的刷新令牌
+ * @returns {RefreshTokenHistoryList} 刷新令牌历史信息
  */
-export function get_refresh_token_history_list_by_token_id(
+export function get_refresh_token_history_list(
     token_id, count = 50, index = 1
 ) {
     if (!token_id) return null;
@@ -1008,19 +1092,13 @@ export function get_user_group(group_id) {
 
     const records = record.select(
         "user_groups", {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": "id",
-                    "restrict": {
-                        "include": [
-                            group_id
-                        ]
-                    }
-                }
-            ]
+            "type": "unit",
+            "column": "id",
+            "restrict": {
+                "include": [
+                    group_id
+                ]
+            }
         }
     ).flat(3);
 
@@ -1056,6 +1134,9 @@ export function get_user_group(group_id) {
  * 
  * @typedef {Object} AddU2GResults
  * @property {AddUserToGroupAuditLog} audit 操作日志
+ * @property {Object} group 用户组记录
+ * @property {GroupRecord} group.new 更新后的记录
+ * @property {GroupRecord} group.old 更新前的记录
  * @property {MemberGroupRelationRecord} relation 成员关系记录
  * 
  * @param {AddU2G} behavior 添加行为
@@ -1112,19 +1193,13 @@ export function add_user_to_group(
     const group = get_user_group(current.group_id);
 
     const where = {
-        "type": "group",
-        "relation": "and",
-        "children": [
-            {
-                "type": "unit",
-                "column": "id",
-                "restrict": {
-                    "include": [
-                        current.group_id
-                    ]
-                }
-            }
-        ]
+        "type": "unit",
+        "column": "id",
+        "restrict": {
+            "include": [
+                current.group_id
+            ]
+        }
     };
 
     return {
@@ -1200,7 +1275,7 @@ function convert_group_user(record) {
  * @property {RemoveUserFromGroupAuditLog} audits 操作日志
  * @property {MemberGroupRelationRecord} relations 成员关系记录
  * 
- * @param {RemoveU4G} behavior 添加行为列表
+ * @param {RemoveU4G} behavior 添加行为
  * @param {RemoveU4G} defaults 默认值集合
  * @param {typeof default_merger} merger 属性合并器
  * @returns {RemoveU4GResults} 用户组记录
@@ -1249,14 +1324,18 @@ export function remove_user_from_group(
                 "type": "unit",
                 "column": "user_id",
                 "restrict": {
-                    "include": [ remove.user_id ]
+                    "include": [
+                        remove.user_id
+                    ]
                 }
             },
             {
                 "type": "unit",
                 "column": "group_id",
                 "restrict": {
-                    "include": [ remove.group_id ]
+                    "include": [
+                        remove.group_id
+                    ]
                 }
             }
         ]
@@ -1319,12 +1398,57 @@ export function remove_user_from_group(
  * @param {number} user_id 用户标识符
  * @param {number} count 每页用户组数
  * @param {number} index 当前页索引（从 1 开始）
- * @returns {MemberGroupRelationRecord} 用户组信息
+ * @returns {MemberGroupRelationRecord[]} 用户组信息
  */
 export function get_group_list_by_user_id(
     user_id, count = 50, index = 1
 ) {
     if (!user_id) return null;
+
+    const record = operator.record();
+
+    const paginate = {
+        "limit": count,
+        "offset": (index - 1) * count
+    };
+
+    const records = record.select(
+        "group_users", {
+            "type": "unit",
+            "column": "user_id",
+            "restrict": {
+                "include": [
+                    user_id
+                ]
+            }
+        }, { paginate }
+    ).flat(3);
+
+    const convert = convert_group_user;
+
+    return records.map(convert);
+}
+
+/**
+ * 根据用户标识符获取所属的用户组信息
+ * 
+ * @typedef {Object} GetGroupMember
+ * @property {number} user_id 用户标识符
+ * @property {number} group_id 用户组标识符
+ * 
+ * @param {RemoveU4G} member 目标成员
+ * @param {RemoveU4G} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {MemberGroupRelationRecord} 用户组信息
+ */
+export function get_group_member(
+    member, defaults = {}, merger = default_merger
+) {
+    if (!member) return null;
+
+    const current = merger(
+        member, defaults
+    );
 
     const record = operator.record();
 
@@ -1338,29 +1462,26 @@ export function get_group_list_by_user_id(
                     "column": "user_id",
                     "restrict": {
                         "include": [
-                            user_id
+                            current.user_id
+                        ]
+                    }
+                },
+                {
+                    "type": "unit",
+                    "column": "group_id",
+                    "restrict": {
+                        "include": [
+                            current.group_id
                         ]
                     }
                 }
             ]
-        }, {
-            "paginate": {
-                "limit": count,
-                "offset": (index - 1) * count
-            }
         }
     ).flat(3);
 
-    return records.map(record => ({
-        "member_id": record.id,
-        "user_id": record.user_id,
-        "group_id": record.group_id,
-        "status": record.status,
-        "expired_at": record.expired_at ?
-            new Date(record.expired_at) : null,
-        "operated_at": new Date(record.operated_at),
-        "operator_id": record.operator_id
-    }));
+    const convert = convert_group_user;
+
+    return records.map(convert)[0];
 }
 
 /**
@@ -1369,7 +1490,7 @@ export function get_group_list_by_user_id(
  * @param {number} group_id 用户组标识符
  * @param {number} count 每页用户数
  * @param {number} index 当前页索引（从 1 开始）
- * @returns {MemberGroupRelationRecord} 用户组信息
+ * @returns {MemberGroupRelationRecord[]} 用户组信息
  */
 export function get_group_user_list(
     group_id, count = 50, index = 1
@@ -1378,27 +1499,21 @@ export function get_group_user_list(
 
     const record = operator.record();
 
+    const paginate = {
+        "limit": count,
+        "offset": (index - 1) * count
+    };
+
     const records = record.select(
         "group_users", {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": "group_id",
-                    "restrict": {
-                        "include": [
-                            group_id
-                        ]
-                    }
-                }
-            ]
-        }, {
-            "paginate": {
-                "limit": count,
-                "offset": (index - 1) * count
+            "type": "unit",
+            "column": "group_id",
+            "restrict": {
+                "include": [
+                    group_id
+                ]
             }
-        }
+        }, { paginate }
     ).flat(3);
 
     const convert = convert_group_user;
@@ -1502,6 +1617,19 @@ export function get_guest_tokens(
 
     const record = operator.record();
 
+    const options = {
+        "paginate": {
+            "limit": count,
+            "offset": (index - 1) * count
+        },
+
+        "by": {
+            "order": [
+                "-created_at"
+            ]
+        }
+    };
+
     const records = record.select(
         "guest_tokens", {
             "type": "unit",
@@ -1511,18 +1639,7 @@ export function get_guest_tokens(
                     ip_address
                 ]
             }
-        }, {
-            "paginate": {
-                "limit": count,
-                "offset": (index - 1) * count
-            },
-
-            "by": {
-                "order": [
-                    "-created_at"
-                ]
-            }
-        }
+        }, options
     ).flat(3);
 
     const convert = convert_guest_token;
@@ -1587,15 +1704,16 @@ export function check_jwt_token(jwt_content) {
 }
 
 /**
- * 生成游客注册验证记录
+ * 生成游客注册验证码
  * 
  * @param {GGRVC} verify_code 验证码
- * @param {GenerateGuestToken} defaults 默认值集合
+ * @param {GGRVC} defaults 默认值集合
  * @param {typeof default_merger} merger 属性合并器
- * @returns {GURVCResults} 验证码记录
+ * @returns {GURVCResults} 结果集合
  */
 export function generate_guest_register_verify_code(
-    verify_code, defaults = {}, merger = default_merger
+    verify_code, defaults = {}, merger = default_merger,
+    _write_table_name = "register_verify_codes"
 ) {
     if (!verify_code) return null;
 
@@ -1609,17 +1727,17 @@ export function generate_guest_register_verify_code(
 
     const { expired_at, created_at } = current;
 
-    const records = [{
+    const records = [ {
         "answer": answer,
         "jti": current.jti,
         "created_at": created_at.toISOString(),
         "expired_at": expired_at.toISOString()
-    }];
+    } ];
 
     const get_results = get_insert_results;
 
     const results = get_results(
-        records, "register_verify_codes"
+        records, _write_table_name
     );
 
     const convert = convert_grv;
@@ -1636,26 +1754,22 @@ export function generate_guest_register_verify_code(
  * @param {number} code_id 验证码标识符
  * @returns {GGRVCRecord} 验证码记录
  */
-export function get_guest_register_verify_code(code_id) {
+export function get_guest_register_verify_code(
+    code_id, _read_table_name = "register_verify_codes"
+) {
     if (!code_id) return null;
 
     const record = operator.record();
 
     const results = record.select(
-        "register_verify_codes", {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": "id",
-                    "restrict": {
-                        "include": [
-                            code_id
-                        ]
-                    }
-                }
-            ]
+        _read_table_name, {
+            "type": "unit",
+            "column": "id",
+            "restrict": {
+                "include": [
+                    code_id
+                ]
+            }
         }
     );
 
@@ -1663,35 +1777,71 @@ export function get_guest_register_verify_code(code_id) {
 }
 
 /**
- * 游客注册验证码失效
+ * 令游客注册验证码失效
  * 
  * @param {number} code_id 验证码标识符
  * @returns {GGRVCRecord} 验证码记录
  */
-export function revoke_guest_register_verify_code(code_id) {
+export function revoke_guest_register_verify_code(
+    code_id, _write_table_name = "register_verify_codes"
+) {
     if (!code_id) return null;
 
     const get_results = get_update_results;
 
-    const results = get_results(
-        {
-            "type": "group",
-            "relation": "and",
-            "children": [
-                {
-                    "type": "unit",
-                    "column": "id",
-                    "restrict": {
-                        "include": [
-                            code_id
-                        ]
-                    }
-                }
+    const results = get_results({
+        "type": "unit",
+        "column": "id",
+        "restrict": {
+            "include": [
+                code_id
             ]
-        }, "register_verify_codes", {
-            "is_invalid": 1
         }
-    );
+    }, _write_table_name, {
+        "is_invalid": 1
+    });
 
     return results.map(convert_grv)[0];
+}
+
+/**
+ * 生成游客登陆账户验证码
+ * 
+ * @typedef {GGRVC} GLVC
+ * 
+ * @param {GLVC} verify_code 验证码
+ * @param {GLVC} defaults 默认值集合
+ * @param {typeof default_merger} merger 属性合并器
+ * @returns {GURVCResults} 结果集合
+ */
+export function generate_login_verify_code(
+    verify_code, defaults = {}, merger = default_merger
+) {
+    return generate_guest_register_verify_code(
+        verify_code, defaults, merger, "login_verify_codes"
+    );
+}
+
+/**
+ * 获取账户登录验证记录
+ * 
+ * @param {number} code_id 验证码标识符
+ * @returns {GGRVCRecord} 验证码记录
+ */
+export function get_login_verify_code(code_id) {
+    return get_guest_register_verify_code(
+        code_id, "login_verify_codes"
+    );
+}
+
+/**
+ * 令账户登录验证码失效
+ * 
+ * @param {number} code_id 验证码标识符
+ * @returns {GGRVCRecord} 验证码记录
+ */
+export function revoke_login_verify_code(code_id) {
+    return revoke_guest_register_verify_code(
+        code_id, "login_verify_codes"
+    );
 }

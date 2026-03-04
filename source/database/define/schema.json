@@ -136,6 +136,57 @@
                     ]
                 }
             },
+             {
+                "name": "login_verify_codes",
+                "options": {
+                    "flags": [
+                        "if-not-exists"
+                    ],
+                    "column": [
+                        {
+                            "name": "id",
+                            "type": "integer",
+                            "flags": [
+                                "primary-key",
+                                "auto-increment"
+                            ]
+                        },
+                        {
+                            "name": "jti",
+                            "type": "text",
+                            "flags": [
+                                "not-null"
+                            ]
+                        },
+                        {
+                            "name": "answer",
+                            "type": "integer",
+                            "flags": [
+                                "not-null"
+                            ]
+                        },
+                        {
+                            "name": "is_invalid",
+                            "type": "bool",
+                            "default": 0
+                        },
+                        {
+                            "name": "expired_at",
+                            "type": "text",
+                            "flags": [
+                                "not-null"
+                            ]
+                        },
+                        {
+                            "name": "created_at",
+                            "type": "text",
+                            "flags": [
+                                "not-null"
+                            ]
+                        }
+                    ]
+                }
+            },
             {
                 "name": "user_info_changes",
                 "options": {
