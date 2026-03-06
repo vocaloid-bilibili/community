@@ -136,7 +136,7 @@
                     ]
                 }
             },
-             {
+            {
                 "name": "login_verify_codes",
                 "options": {
                     "flags": [
@@ -425,7 +425,8 @@
                             "name": "code",
                             "type": "text",
                             "flags": [
-                                "not-null"
+                                "not-null",
+                                "unique"
                             ]
                         },
                         {

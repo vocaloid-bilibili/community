@@ -1043,7 +1043,7 @@ function convert_user_group(record) {
 /**
  * 创建用户组
  * 
- * @param {CreateGroup[]} groups 用户组列表
+ * @param {CreateGroup} group 用户组列表
  * @param {CreateGroup} defaults 默认值集合
  * @param {typeof default_merger} merger 属性合并器
  * @returns {GroupRecord[]} 用户组记录
@@ -1084,7 +1084,7 @@ export function create_user_group(
 /**
  * 获取用户组信息
  * 
- * @param {number} group_id 需要获取的用户组标识符
+ * @param {number} group_id 用户组标识符
  * @returns {GroupRecord} 用户组记录
  */
 export function get_user_group(group_id) {
@@ -1097,6 +1097,32 @@ export function get_user_group(group_id) {
             "restrict": {
                 "include": [
                     group_id
+                ]
+            }
+        }
+    ).flat(3);
+
+    const convert = convert_user_group;
+
+    return records.map(convert)[0];
+}
+
+/**
+ * 获取用户组信息
+ * 
+ * @param {number} code 用户组代号
+ * @returns {GroupRecord} 用户组记录
+ */
+export function get_user_group_by_code(code) {
+    const record = operator.record();
+
+    const records = record.select(
+        "user_groups", {
+            "type": "unit",
+            "column": "code",
+            "restrict": {
+                "include": [
+                    code
                 ]
             }
         }

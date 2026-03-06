@@ -362,7 +362,6 @@ app.post("/register/user", (request, response) => {
 
     const { username } = params;
 
-
     if (tests.username.test(username)) {
         return response.send({
             "status": "failure",
@@ -1214,5 +1213,84 @@ app.get("/groups/:group_id/members", (request, response) => {
             })),
             "total": group.counters.member
         }
+    });
+});
+
+app.post("/create/group", (request, response) => {
+    const now_ts = Date.now();
+
+    const { token } = request;
+
+    if (token.type !== "system") {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_token_type",
+            "msg": "无效的令牌类型"
+        });
+    }
+
+    const { body: params } = request;
+
+    if (!params.code.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_group_code",
+            "msg": "未提供用户组代号"
+        });
+    }
+
+    if (!params.name.trim()) {
+        return response.send({
+            "status": "failure",
+            "code": "invalid_group_name",
+            "msg": "未提供用户组名称"
+        });
+    }
+
+    if (params.description) {
+        const { description } = params;
+
+        if (description.length > 255) {
+            return response.send({
+                "status": "failure",
+                "code": "invaild_description_length",
+                "msg": "用户组简介长度过长"
+            });
+        }
+    }
+
+    const methods = [
+        "get_user_group_by_code"
+    ];
+
+    const result = community[methods[0]](
+        { "code": params.code }
+    );
+
+    if (result !== undefined) {
+        return response.send({
+            "status": "failure",
+            "code": "duplicated_group_code",
+            "msg": "用户组代号重复"
+        });
+    }
+
+    methods[0] = "create_user_group";
+
+    const group = community[methods[0]]({
+        "code": params.code,
+        "name": params.name,
+        "created_at": new Date(now_ts),
+        "creator_id": get_user_id(token.sub),
+        "description": params.description
+    });
+
+    return response.send({
+        "status": "success",
+        "data": {
+            "group_id": group.id,
+            "created_at": new Date(now_ts)
+        },
+        "msg": "用户组创建成功"
     });
 });
